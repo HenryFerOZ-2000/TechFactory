@@ -17,46 +17,7 @@ from pathlib import Path
 # Estos ajustes solo se activan cuando corres en Render u otro entorno
 # donde definas RENDER=1 (o puedes usar cualquier variable que prefieras).
 
-if os.getenv("RENDER") == "1":
-    # Seguridad y dominios
-    DEBUG = os.getenv("DEBUG", "False") == "True"
-    # No quitamos lo que ya tienes; si ya definiste ALLOWED_HOSTS arriba como [], sumamos
-    try:
-        # Si ALLOWED_HOSTS ya existe como lista
-        ALLOWED_HOSTS = list(set(list(ALLOWED_HOSTS) + ["*", "tusubdominio.onrender.com"]))
-    except Exception:
-        ALLOWED_HOSTS = ["*", "tusubdominio.onrender.com"]
 
-    # CSRF para Render
-    try:
-        CSRF_TRUSTED_ORIGINS = list(set(list(CSRF_TRUSTED_ORIGINS) + ["https://*.onrender.com"]))
-    except NameError:
-        CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com"]
-
-    # WhiteNoise para archivos estáticos (no elimina tus STATIC_URL existentes)
-    # Insertamos el middleware en la posición correcta sin borrar tu lista original
-    if "whitenoise.middleware.WhiteNoiseMiddleware" not in MIDDLEWARE:
-        # Debe ir inmediatamente después de SecurityMiddleware
-        try:
-            idx = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
-            MIDDLEWARE.insert(idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
-        except ValueError:
-            # Si por algún motivo no está SecurityMiddleware, lo agregamos al inicio
-            MIDDLEWARE = ["django.middleware.security.SecurityMiddleware",
-                          "whitenoise.middleware.WhiteNoiseMiddleware"] + MIDDLEWARE
-
-    # Ruta de colección de estáticos en producción (no interfiere con tu STATIC_URL)
-    STATIC_ROOT = BASE_DIR / "staticfiles"
-    # Almacenamiento recomendado de WhiteNoise
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-    # Base de datos: usa DATABASE_URL si existe, si no cae a tu SQLite actual
-    DATABASES["default"] = dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        ssl_require=False
-    )
-# --- ⬆️ FIN DE AÑADIDOS PARA DEPLOY ⬆️ ---
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -229,3 +190,50 @@ LOGOUT_REDIRECT_URL = 'base:landing'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# --- AÑADIDOS PARA DEPLOY EN RENDER (colocar al FINAL del archivo) ---
+import os
+import dj_database_url
+
+if os.getenv("RENDER") == "1":
+    # DEBUG y hosts
+    DEBUG = os.getenv("DEBUG", "False") == "True"
+
+    # ALLOWED_HOSTS: no pisamos lo que ya tienes; solo añadimos comodín y onrender
+    _hosts_actuales = list(globals().get("ALLOWED_HOSTS", []))
+    for h in ["*", "techfactory.onrender.com"]:
+        if h not in _hosts_actuales:
+            _hosts_actuales.append(h)
+    ALLOWED_HOSTS = _hosts_actuales
+
+    # CSRF
+    _csrf = list(globals().get("CSRF_TRUSTED_ORIGINS", []))
+    if "https://*.onrender.com" not in _csrf:
+        _csrf.append("https://*.onrender.com")
+    CSRF_TRUSTED_ORIGINS = _csrf
+
+    # Insertar WhiteNoise sin fallar si MIDDLEWARE aún no estaba
+    _mw = list(globals().get("MIDDLEWARE", []))
+    if "whitenoise.middleware.WhiteNoiseMiddleware" not in _mw:
+        try:
+            idx = _mw.index("django.middleware.security.SecurityMiddleware")
+            _mw.insert(idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
+        except ValueError:
+            _mw = ["django.middleware.security.SecurityMiddleware",
+                   "whitenoise.middleware.WhiteNoiseMiddleware"] + _mw
+    MIDDLEWARE = _mw
+
+    # Staticfiles en producción
+    from pathlib import Path
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    STATIC_URL = "/static/"
+    STATIC_ROOT = BASE_DIR / "staticfiles"
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+    # Base de datos: usa DATABASE_URL si existe, si no, deja tu SQLite
+    DATABASES["default"] = dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        ssl_require=False
+    )
+# --- FIN AÑADIDOS PARA RENDER ---
