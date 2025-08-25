@@ -1,0 +1,138 @@
+{% extends 'base/base.html' %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <form action="{% url 'base:registrar_salida' %}" method="post" class="row g-2">
+      {% csrf_token %}
+      <div class="col-md-3"><input name="nombre" class="form-control" placeholder="NOMBRE *" required></div>
+      <div class="col-md-3"><input name="cedula" class="form-control" placeholder="CÉDULA *" required></div>
+      <div class="col-md-3"><input name="celular" class="form-control" placeholder="CELULAR"></div>
+      <div class="col-md-3">
+        <select name="carrera" class="form-select" required>
+          <option value="" disabled selected>CARRERA *</option>
+          {% for val,label in form.fields.carrera.choices %}
+            <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- COMPONENTE con datalist (escribe para filtrar). Enviamos 'id | nombre | UBI: ... | DISP: ...' -->
+      <div class="col-md-6">
+        <input
+          id="comp-input"
+          name="componente_combo"
+          class="form-control"
+          placeholder="COMPONENTE * (escribe para buscar y elige)"
+          list="listaComponentes"
+          autocomplete="off"
+          required
+        >
+        <datalist id="listaComponentes">
+          {% for c in componentes %}
+            <!-- El valor incluye ID, nombre, ubicación y disponible para que el usuario lo vea al filtrar -->
+            <option value="{{ c.id }} | {{ c.nombre }} | UBI: {{ c.ubicacion }} | DISP: {{ c.cantidad_disponible|default_if_none:0 }}"></option>
+          {% endfor %}
+        </datalist>
+        <small class="text-secondary">
+          Recomendado: selecciona una opción del listado (si escribes solo texto, el sistema podría no identificar el componente).
+        </small>
+      </div>
+
+      <div class="col-md-3">
+        <input name="cantidad" type="number" min="1" class="form-control" placeholder="CANTIDAD *" required>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button class="btn btn-primary">REGISTRAR SALIDA</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Filtros (el de componentes también recorta la lista del datalist desde la vista) -->
+  <div class="col-12">
+    <form method="get" class="row g-2">
+      <div class="col-md-3">
+        <input name="filtro_cedula" class="form-control" placeholder="FILTRAR CÉDULA" value="{{ filtros.data.filtro_cedula }}">
+      </div>
+      <div class="col-md-3">
+        <input name="filtro_celular" class="form-control" placeholder="FILTRAR CELULAR" value="{{ filtros.data.filtro_celular }}">
+      </div>
+      <div class="col-md-3">
+        <input name="filtro_componente" class="form-control" placeholder="FILTRAR COMPONENTES" value="{{ filtros.data.filtro_componente }}">
+      </div>
+      <div class="col-md-3 d-grid">
+        <button class="btn btn-secondary">APLICAR FILTROS</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12">
+    <div class="table-responsive">
+      <table class="table table-dark table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Cédula / Celular</th>
+            <th>Carrera</th>
+            <th>Componente</th>
+            <th>Cantidad</th>
+            <th>Fecha / Hora Salida</th>
+            <th>Fecha / Hora Entrada</th>
+            <th>Registrar Entrada</th>
+            <th>Renovar Salida</th>
+            <th>Generar Correo</th>
+            <th>Eliminar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in registros %}
+          <!-- 🔴 Fila roja si está vencido (sin entrada y vence_el <= ahora) -->
+          <tr class="{% if not r.fecha_entrada and r.vence_el and r.vence_el <= now %}table-danger{% endif %}">
+            <td>{{ r.persona.nombre }}</td>
+            <td>{{ r.persona.cedula }}<br>{{ r.persona.celular }}</td>
+            <td>{{ r.persona.carrera }}</td>
+            <td>{{ r.componente.nombre }}</td>
+            <td>{{ r.cantidad }}</td>
+            <td>{{ r.fecha_salida|date:"Y-m-d H:i:s" }}</td>
+            <td>{% if r.fecha_entrada %}{{ r.fecha_entrada|date:"Y-m-d H:i:s" }}{% endif %}</td>
+
+            <td>
+              {% if r.estado == 'prestado' %}
+              <form action="{% url 'base:registrar_entrada' r.id %}" method="post">
+                {% csrf_token %}<button class="btn btn-success btn-sm">Registrar entrada</button>
+              </form>
+              {% else %}
+              <span class="badge bg-secondary">Devuelto</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if r.estado == 'prestado' %}
+              <form action="{% url 'base:renovar_salida' r.id %}" method="post">
+                {% csrf_token %}<button class="btn btn-warning btn-sm">Renovar salida</button>
+              </form>
+              {% endif %}
+            </td>
+
+            <td>
+              <form action="{% url 'base:generar_correo' r.id %}" method="post">
+                {% csrf_token %}<button class="btn btn-info btn-sm">Generar correo</button>
+              </form>
+            </td>
+
+            <td>
+              <form action="{% url 'base:eliminar_registro' r.id %}" method="post" class="d-flex gap-1">
+                {% csrf_token %}
+                <input type="password" name="password" class="form-control form-control-sm" placeholder="Pass" style="max-width: 110px;">
+                <button class="btn btn-danger btn-sm">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="text-center">Sin registros</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

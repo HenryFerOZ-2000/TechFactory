@@ -1,0 +1,69 @@
+{% extends 'base/base.html' %}
+{% block content %}
+<h4 class="mb-3">Componentes</h4>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por nombre o ubicación">
+  </div>
+  <div class="col-md-3 form-check d-flex align-items-center">
+    <input class="form-check-input me-2" type="checkbox" name="solo_activos" value="1" id="solo_activos" {% if request.GET.solo_activos %}checked{% endif %}>
+    <label for="solo_activos">Solo activos</label>
+  </div>
+  <div class="col-md-2 d-grid">
+    <button class="btn btn-secondary">Buscar</button>
+  </div>
+</form>
+
+<div class="card bg-dark border-secondary mb-4">
+  <div class="card-body">
+    <form action="{% url 'base:componentes_create' %}" method="post" class="row g-2">
+      {% csrf_token %}
+      <div class="col-md-3"><input class="form-control" name="nombre" placeholder="Nombre *" required></div>
+      <div class="col-md-3"><input class="form-control" name="ubicacion" placeholder="Ubicación"></div>
+      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_total" placeholder="Total" min="0" value="0"></div>
+      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_disponible" placeholder="Disponible" min="0" value="0"></div>
+      <div class="col-md-1 form-check d-flex align-items-center">
+        <input class="form-check-input" type="checkbox" name="activo" id="activo" checked>
+        <label class="ms-2" for="activo">Activo</label>
+      </div>
+      <div class="col-md-1 d-grid"><button class="btn btn-primary">Guardar</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-dark table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Ubicación</th>
+        <th>Total</th>
+        <th>Disponible</th>
+        <th>Activo</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in comps %}
+      <tr>
+        <td>{{ c.nombre }}</td>
+        <td>{{ c.ubicacion }}</td>
+        <td>{{ c.cantidad_total }}</td>
+        <td>{{ c.cantidad_disponible }}</td>
+        <td>{% if c.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+        <td>
+          <form action="{% url 'base:componentes_delete' c.id %}" method="post" class="d-inline">
+           {% csrf_token %}
+           <button class="btn btn-danger btn-sm">Eliminar</button>
+          </form>
+
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="text-center">Sin componentes</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,606 @@
+{% extends 'impresoras/base_impresoras.html' %}
+{% load impresoras_extras %}
+
+{% block content %}
+<div id="calendar-root" data-monday="{{ week_days.0|date:'Y-m-d' }}">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">
+      Reservas
+      {% if is_admin %}
+        <span class="badge bg-info align-middle ms-2">Admin</span>
+      {% endif %}
+    </h2>
+
+    <div class="d-flex align-items-center gap-2">
+      <a id="prevWeekLink" class="btn btn-outline-secondary btn-sm" href="#">« Semana anterior</a>
+      <a id="nextWeekLink" class="btn btn-outline-secondary btn-sm" href="#">Semana siguiente »</a>
+
+      <form class="d-flex align-items-center gap-2" method="get" action="{% url 'impresoras:exportar_excel' %}">
+        <input type="month" name="month" class="form-control form-control-sm" required>
+        <select name="impresora" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for t in tab_data %}
+            <option value="{{ t.imp.id }}">{{ t.imp.nombre }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-success btn-sm">Exportar mes</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" role="tablist">
+    {% for t in tab_data %}
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link {% if forloop.first %}active{% endif %}"
+          id="tab-{{ t.imp.id }}"
+          data-bs-toggle="tab"
+          data-bs-target="#pane-{{ t.imp.id }}"
+          type="button"
+          role="tab">
+          {{ t.imp.nombre }}
+        </button>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <div class="tab-content border border-top-0 rounded-bottom p-3 bg-white">
+    {% for t in tab_data %}
+      <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ t.imp.id }}" role="tabpanel">
+        <div class="table-responsive">
+          <table class="table table-bordered align-middle text-center">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:120px">Hora</th>
+                {% for d in week_days %}
+                  <th>{{ d|date:"D d/m" }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for h in hours %}
+                <tr>
+                  <th style="white-space:nowrap">{{ h|stringformat:"02d" }}:00–{{ h|add:"1"|stringformat:"02d" }}:00</th>
+
+                  {% for d in week_days %}
+                    {% res_at t.mapa d h as r %}
+
+                    {# ===== LABORATORIO ===== #}
+                    {% if t.is_lab %}
+                      {% with count=r.count|default:0 %}
+                        {% with left=lab_capacity|sub:count %}
+
+                          {% if left <= 0 %}
+                            <td class="{% if r.all_used %}bg-success{% else %}bg-danger{% endif %} text-white">
+                              <div class="small fw-bold">{% if r.all_used %}Usado{% else %}Lleno{% endif %}</div>
+                              <div class="small">{{ count }}/{{ lab_capacity }}</div>
+
+                              {% if is_admin and count > 0 %}
+                                <div id="lab-pop-{{ t.imp.id }}-{{ d|date:'Ymd' }}-{{ h }}" class="d-none">
+                                  <div class="text-start" style="min-width:260px">
+                                    <div class="fw-bold mb-2">Reservas ({{ count }})</div>
+                                    <div class="vstack gap-2">
+                                      {% for it in r.items %}
+                                        <div class="p-2 border rounded bg-white text-dark">
+                                          <div class="small"><b>Nombre:</b> {{ it.estudiante_nombre|default:"—"|escape }}</div>
+                                          <div class="small"><b>Cédula:</b> {{ it.estudiante_cedula|default:"—"|escape }}</div>
+                                          <div class="small"><b>Celular:</b> {{ it.estudiante_celular|default:"—"|escape }}</div>
+                                          <div class="small"><b>Carrera:</b> {{ it.estudiante_carrera|default:"—"|escape }}</div>
+                                          <div class="small"><b>Estado:</b>
+                                            {% if it.estado == 'usado' %}
+                                              <span class="badge bg-success">Usado</span>
+                                            {% elif it.estado == 'reservado' %}
+                                              <span class="badge bg-danger">Reservado</span>
+                                            {% else %}
+                                              <span class="badge bg-secondary">{{ it.get_estado_display|default:"—" }}</span>
+                                            {% endif %}
+                                          </div>
+                                          {% if it.tecnico_observaciones %}
+                                            <div class="small mt-1"><b>Obs:</b> {{ it.tecnico_observaciones|linebreaksbr }}</div>
+                                          {% endif %}
+
+                                          <div class="mt-2 d-flex gap-2">
+                                            <a href="{% url 'impresoras:admin_cancelar_lab' it.id %}?next={{ request.get_full_path|urlencode }}"
+                                               class="btn btn-sm btn-outline-danger"
+                                               onclick="return confirm('¿Cancelar esta reserva?');">
+                                              Cancelar
+                                            </a>
+
+                                            {% if it.estado != 'usado' %}
+                                              <button type="button"
+                                                      class="btn btn-sm btn-outline-success used-lab-btn"
+                                                      data-reserva="{{ it.id }}"
+                                                      data-next="{{ request.get_full_path|urlencode }}">
+                                                Marcar usado
+                                              </button>
+                                            {% else %}
+                                              <button type="button" class="btn btn-sm btn-success" disabled>Usado</button>
+                                            {% endif %}
+                                          </div>
+                                        </div>
+                                      {% empty %}
+                                        <div class="text-muted small">Sin reservas.</div>
+                                      {% endfor %}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-light mt-2"
+                                        data-popover-id="lab-pop-{{ t.imp.id }}-{{ d|date:'Ymd' }}-{{ h }}">
+                                  Ver ({{ count }})
+                                </button>
+                              {% endif %}
+                            </td>
+
+                          {% else %}
+                            <td>
+                              <div class="d-flex flex-column align-items-center gap-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary"
+                                        data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
+                                        data-bs-html="true" data-bs-sanitize="false"
+                                        data-bs-content="
+                                          <div class='mb-2 small'>Cupos disponibles: {{ left }}/{{ lab_capacity }}</div>
+                                          <button class='btn btn-primary btn-sm'
+                                                  onclick='openReserveLabModal({{ t.imp.id }}, &quot;{{ d|date:"Y-m-d" }}&quot;, {{ h }}, {{ lab_capacity }}, {{ count }})'>
+                                            Reservar
+                                          </button>
+                                        ">
+                                  Libre ({{ left }})
+                                </button>
+
+                                {% if is_admin and count > 0 %}
+                                  <div id="lab-pop-{{ t.imp.id }}-{{ d|date:'Ymd' }}-{{ h }}" class="d-none">
+                                    <div class="text-start" style="min-width:260px">
+                                      <div class="fw-bold mb-2">Reservas ({{ count }})</div>
+                                      <div class="vstack gap-2">
+                                        {% for it in r.items %}
+                                          <div class="p-2 border rounded bg-light">
+                                            <div class="small"><b>Nombre:</b> {{ it.estudiante_nombre|default:"—"|escape }}</div>
+                                            <div class="small"><b>Cédula:</b> {{ it.estudiante_cedula|default:"—"|escape }}</div>
+                                            <div class="small"><b>Celular:</b> {{ it.estudiante_celular|default:"—"|escape }}</div>
+                                            <div class="small"><b>Carrera:</b> {{ it.estudiante_carrera|default:"—"|escape }}</div>
+                                            <div class="small"><b>Estado:</b>
+                                              {% if it.estado == 'usado' %}
+                                                <span class="badge bg-success">Usado</span>
+                                              {% elif it.estado == 'reservado' %}
+                                                <span class="badge bg-danger">Reservado</span>
+                                              {% else %}
+                                                <span class="badge bg-secondary">{{ it.get_estado_display|default:"—" }}</span>
+                                              {% endif %}
+                                            </div>
+                                            {% if it.tecnico_observaciones %}
+                                              <div class="small mt-1"><b>Obs:</b> {{ it.tecnico_observaciones|linebreaksbr }}</div>
+                                            {% endif %}
+
+                                            <div class="mt-2 d-flex gap-2">
+                                              <a href="{% url 'impresoras:admin_cancelar_lab' it.id %}?next={{ request.get_full_path|urlencode }}"
+                                                 class="btn btn-sm btn-outline-danger"
+                                                 onclick="return confirm('¿Cancelar esta reserva?');">
+                                                Cancelar
+                                              </a>
+
+                                              {% if it.estado != 'usado' %}
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-success used-lab-btn"
+                                                        data-reserva="{{ it.id }}"
+                                                        data-next="{{ request.get_full_path|urlencode }}">
+                                                  Marcar usado
+                                                </button>
+                                              {% else %}
+                                                <button type="button" class="btn btn-sm btn-success" disabled>Usado</button>
+                                              {% endif %}
+                                            </div>
+                                          </div>
+                                        {% endfor %}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <button type="button"
+                                          class="btn btn-sm btn-outline-secondary"
+                                          data-popover-id="lab-pop-{{ t.imp.id }}-{{ d|date:'Ymd' }}-{{ h }}">
+                                    Ver ({{ count }})
+                                  </button>
+                                {% endif %}
+                              </div>
+                            </td>
+                          {% endif %}
+
+                        {% endwith %}
+                      {% endwith %}
+
+                    {# ===== IMPRESORAS ===== #}
+                    {% else %}
+                      {% if r %}
+                        {% if r.estado == 'reservado' %}
+                          <td class="bg-danger text-white">
+                            <div class="small fw-bold">Reservado</div>
+                            {% if is_admin %}
+                              <div class="mt-1 d-flex flex-wrap gap-1 justify-content-center">
+                                <button type="button" class="btn btn-outline-light btn-sm"
+                                        data-bs-toggle="popover" data-bs-title="Reserva"
+                                        data-bs-container="body" data-bs-html="false"
+                                        data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Estado: {{ r.get_estado_display|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                  Ver
+                                </button>
+
+                                <a href="{% url 'impresoras:admin_cancelar' r.id %}?next={{ request.get_full_path|urlencode }}"
+                                   class="btn btn-outline-light btn-sm"
+                                   onclick="return confirm('¿Seguro que deseas cancelar esta reserva?');">
+                                  Cancelar
+                                </a>
+
+                                <button type="button"
+                                        class="btn btn-outline-light btn-sm used-btn"
+                                        data-reserva="{{ r.id }}"
+                                        data-next="{{ request.get_full_path|urlencode }}">
+                                  Marcar usado
+                                </button>
+                              </div>
+                            {% endif %}
+                          </td>
+
+                        {% elif r.estado == 'usado' %}
+                          <td class="bg-success text-white">
+                            <div class="small fw-bold">Usado</div>
+                            {% if is_admin %}
+                              <button type="button" class="btn btn-outline-light btn-sm mt-1"
+                                      data-bs-toggle="popover" data-bs-title="Reserva"
+                                      data-bs-container="body" data-bs-html="false"
+                                      data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Estado: {{ r.get_estado_display|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                Ver
+                              </button>
+                            {% endif %}
+                          </td>
+
+                        {% else %}
+                          <td>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
+                                    data-bs-html="true" data-bs-sanitize="false"
+                                    data-bs-trigger="focus"
+                                    data-bs-content="<button class='btn btn-primary btn-sm' onclick='openReserveModal({{ t.imp.id }}, &quot;{{ d|date:'Y-m-d' }}&quot;, {{ h }})'>Reservar</button>">
+                              Libre
+                            </button>
+                          </td>
+                        {% endif %}
+                      {% else %}
+                        <td>
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary"
+                                  data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
+                                  data-bs-html="true" data-bs-sanitize="false"
+                                  data-bs-trigger="focus"
+                                  data-bs-content="<button class='btn btn-primary btn-sm' onclick='openReserveModal({{ t.imp.id }}, &quot;{{ d|date:'Y-m-d' }}&quot;, {{ h }})'>Reservar</button>">
+                            Libre
+                          </button>
+                        </td>
+                      {% endif %}
+                    {% endif %}
+
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Modal: crear reserva (impresoras) -->
+<div class="modal fade" id="reserveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{% url 'impresoras:crear_reserva' %}">
+      {% csrf_token %}
+      <div class="modal-header">
+        <h5 class="modal-title">Crear reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body vstack gap-2">
+        <input type="hidden" name="impresora_id" id="impId">
+        <input type="hidden" name="fecha" id="fecha">
+        <input type="hidden" name="hora" id="hora">
+        <input type="hidden" name="next" id="nextUrl">
+        <div class="form-text" id="slotInfo"></div>
+
+        <div>
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="estudiante_nombre" required>
+        </div>
+        <div>
+          <label class="form-label">Cédula</label>
+          <input class="form-control" name="estudiante_cedula">
+        </div>
+        <div>
+          <label class="form-label">Celular</label>
+          <input class="form-control" name="estudiante_celular">
+        </div>
+
+        <div>
+          <label class="form-label">Carrera</label>
+          <select class="form-select" name="estudiante_carrera" required>
+            <option value="" selected disabled>Selecciona una carrera…</option>
+            {% for val, label in form.fields.estudiante_carrera.choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary">Reservar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: marcar usado (observaciones del técnico) -->
+<div class="modal fade" id="usedModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="usedForm" class="modal-content" method="post">
+      {% csrf_token %}
+      <div class="modal-header">
+        <h5 class="modal-title">Marcar como usado</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body vstack gap-2">
+        <input type="hidden" name="next" id="usedNext">
+        <div>
+          <label class="form-label">Observaciones del técnico</label>
+          <textarea class="form-control" name="observaciones" rows="4"
+                    placeholder="Ej.: Impresión correcta, 2 intentos, filamento PLA, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: crear reserva LAB -->
+<div class="modal fade" id="labReserveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{% url 'impresoras:crear_reserva_lab' %}">
+      {% csrf_token %}
+      <div class="modal-header">
+        <h5 class="modal-title">Reserva laboratorio</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body vstack gap-2">
+        <input type="hidden" name="fecha" id="labFecha">
+        <input type="hidden" name="hora" id="labHora">
+        <input type="hidden" name="next" id="labNext">
+        <div class="form-text" id="labSlotInfo"></div>
+        <div class="form-text" id="labCupoHint"></div>
+
+        <div>
+          <label class="form-label">Nombre</label>
+          <input class="form-control" name="estudiante_nombre" required>
+        </div>
+        <div>
+          <label class="form-label">Cédula</label>
+          <input class="form-control" name="estudiante_cedula">
+        </div>
+        <div>
+          <label class="form-label">Celular</label>
+          <input class="form-control" name="estudiante_celular">
+        </div>
+        <div>
+          <label class="form-label">Carrera</label>
+          <select class="form-select" name="estudiante_carrera" required>
+            <option value="" selected disabled>Selecciona una carrera…</option>
+            {% for val, label in form.fields.estudiante_carrera.choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary">Reservar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // ---------- Utilidades ----------
+  function fmtDate(d) { return d.toISOString().slice(0,10); }
+  function addDaysStr(yyyy_mm_dd, n) {
+    const d = new Date(yyyy_mm_dd + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return fmtDate(d);
+  }
+  function getActiveImpId() {
+    const active = document.querySelector('.nav-link.active');
+    if (!active) return null;
+    const m = active.id.match(/^tab-(\d+)/);
+    return m ? m[1] : null;
+  }
+  function updateWeekLinks() {
+    const root = document.getElementById('calendar-root');
+    const monday = root?.dataset?.monday;
+    const url = new URL(window.location);
+    const imp = url.searchParams.get('imp') || getActiveImpId();
+    const week = url.searchParams.get('week') || monday;
+
+    const prev = addDaysStr(week, -7);
+    const next = addDaysStr(week, +7);
+
+    const prevA = document.getElementById('prevWeekLink');
+    const nextA = document.getElementById('nextWeekLink');
+
+    const prevUrl = new URL(window.location.pathname, window.location.origin);
+    prevUrl.searchParams.set('week', prev);
+    if (imp) prevUrl.searchParams.set('imp', imp);
+
+    const nextUrl = new URL(window.location.pathname, window.location.origin);
+    nextUrl.searchParams.set('week', next);
+    if (imp) nextUrl.searchParams.set('imp', imp);
+
+    prevA.href = prevUrl.pathname + prevUrl.search;
+    nextA.href = nextUrl.pathname + nextUrl.search;
+  }
+  function hideAllPopovers() {
+    document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(el => {
+      const inst = bootstrap.Popover.getInstance(el);
+      if (inst) inst.hide();
+    });
+  }
+
+  // ---------- Inicio ----------
+  document.addEventListener('DOMContentLoaded', function () {
+    // Popovers clásicos
+    document.querySelectorAll('[data-bs-toggle="popover"]').forEach((el) => {
+      new bootstrap.Popover(el, { html: true, sanitize: false, container: 'body', trigger: 'click' });
+      el.addEventListener('shown.bs.popover', () => {
+        document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(other => {
+          if (other !== el) {
+            const i = bootstrap.Popover.getInstance(other);
+            if (i) i.hide();
+          }
+        });
+      });
+    });
+
+    // Popovers "Ver (N)" desde div oculto
+    document.querySelectorAll('[data-popover-id]').forEach((el) => {
+      const id = el.getAttribute('data-popover-id');
+      const src = document.getElementById(id);
+      if (!src) return;
+      new bootstrap.Popover(el, {
+        html: true,
+        sanitize: false,
+        container: 'body',
+        trigger: 'click',
+        content: src.innerHTML
+      });
+      el.addEventListener('shown.bs.popover', () => {
+        document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(other => {
+          if (other !== el) {
+            const i = bootstrap.Popover.getInstance(other);
+            if (i) i.hide();
+          }
+        });
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      const isTrigger = e.target.closest('[data-bs-toggle="popover"],[data-popover-id]');
+      const inPopover = e.target.closest('.popover');
+      if (!isTrigger && !inPopover) hideAllPopovers();
+    }, { capture: true });
+    window.addEventListener('scroll', hideAllPopovers, { passive: true });
+
+    // Activar pestaña según ?imp=
+    const url = new URL(window.location);
+    const imp = url.searchParams.get('imp');
+    if (imp) {
+      const btn = document.getElementById('tab-' + imp);
+      if (btn) new bootstrap.Tab(btn).show();
+    }
+
+    // Mantener ?imp= y actualizar flechas semana
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(btn => {
+      btn.addEventListener('shown.bs.tab', (e) => {
+        const id = e.target.id.replace('tab-','');
+        const u = new URL(window.location);
+        u.searchParams.set('imp', id);
+        history.replaceState(null, '', u.pathname + u.search);
+        updateWeekLinks();
+      });
+    });
+
+    updateWeekLinks();
+
+    // Cierra popovers al abrir los modales
+    document.getElementById('reserveModal').addEventListener('show.bs.modal', hideAllPopovers);
+    document.getElementById('usedModal').addEventListener('show.bs.modal', hideAllPopovers);
+    const lm = document.getElementById('labReserveModal');
+    if (lm) lm.addEventListener('show.bs.modal', hideAllPopovers);
+
+    // Delegado: "Marcar usado" de impresoras
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.used-btn');
+      if (!btn) return;
+      const reservaId = btn.dataset.reserva;
+      const nextEncoded = btn.dataset.next;
+
+      const form = document.getElementById('usedForm');
+      const base = "{% url 'impresoras:admin_marcar_usado' 0 %}".replace("/0/", "/" + reservaId + "/");
+      form.action = base + "?next=" + nextEncoded;
+      document.getElementById('usedNext').value = decodeURIComponent(nextEncoded);
+
+      new bootstrap.Modal(document.getElementById('usedModal')).show();
+    });
+
+    // Delegado: "Marcar usado" de LAB (con observaciones)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.used-lab-btn');
+      if (!btn) return;
+
+      const reservaId = btn.dataset.reserva;
+      const nextEncoded = btn.dataset.next;
+
+      const form = document.getElementById('usedForm'); // reutilizamos el mismo modal
+      const base = "{% url 'impresoras:admin_marcar_usado_lab' 0 %}".replace("/0/", "/" + reservaId + "/");
+      form.action = base + "?next=" + nextEncoded;
+      document.getElementById('usedNext').value = decodeURIComponent(nextEncoded);
+
+      // Cierra popovers antes de abrir el modal
+      hideAllPopovers();
+
+      new bootstrap.Modal(document.getElementById('usedModal')).show();
+    });
+  });
+
+  // Abre modal de impresora
+  function openReserveModal(impresoraId, fecha, hora) {
+    hideAllPopovers();
+
+    const u = new URL(window.location);
+    const root = document.getElementById('calendar-root');
+    const monday = root?.dataset?.monday;
+    if (!u.searchParams.get('week') && monday) u.searchParams.set('week', monday);
+    u.searchParams.set('imp', impresoraId);
+    document.getElementById('nextUrl').value = u.pathname + u.search;
+
+    const pretty = `${String(hora).padStart(2,'0')}:00 – ${String(hora+1).toString().padStart(2,'0')}:00`;
+    document.getElementById('impId').value = impresoraId;
+    document.getElementById('fecha').value = fecha;
+    document.getElementById('hora').value = hora;
+    document.getElementById('slotInfo').innerText = `Reserva para ${fecha} • ${pretty}`;
+
+    new bootstrap.Modal(document.getElementById('reserveModal')).show();
+  }
+
+  // Abre modal LAB
+  function openReserveLabModal(impresoraId, fecha, hora, capacidad, yaTomados) {
+    hideAllPopovers();
+
+    const u = new URL(window.location);
+    const root = document.getElementById('calendar-root');
+    const monday = root?.dataset?.monday;
+    if (!u.searchParams.get('week') && monday) u.searchParams.set('week', monday);
+    u.searchParams.set('imp', impresoraId);
+    document.getElementById('labNext').value = u.pathname + u.search;
+
+    document.getElementById('labFecha').value = fecha;
+    document.getElementById('labHora').value  = hora;
+
+    const pretty = `${String(hora).padStart(2,'0')}:00 – ${String(hora+1).toString().padStart(2,'0')}:00`;
+    document.getElementById('labSlotInfo').innerText = `Reserva para ${fecha} • ${pretty}`;
+
+    const left = Math.max(0, (capacidad || 0) - (yaTomados || 0));
+    document.getElementById('labCupoHint').innerText = `Cupos disponibles: ${left}/${capacidad}`;
+
+    new bootstrap.Modal(document.getElementById('labReserveModal')).show();
+  }
+</script>
+{% endblock %}

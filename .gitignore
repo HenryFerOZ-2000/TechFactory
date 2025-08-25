@@ -1,0 +1,19 @@
+# Entornos virtuales
+venv/
+ENV/
+*.pyc
+__pycache__/
+
+# Archivos de base de datos local
+db.sqlite3
+
+# Archivos estáticos generados
+staticfiles/
+
+# Configuración sensible
+.env
+*.log
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db

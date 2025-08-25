@@ -1,0 +1,16 @@
+{% extends 'base/base.html' %}
+{% block content %}
+<h4 class="mb-3">Cargar inventario (CSV)</h4>
+<form method="post" enctype="multipart/form-data" class="row g-2">
+  {% csrf_token %}
+  <div class="col-md-6">
+    <input type="file" name="csv" accept=".csv" class="form-control" required>
+  </div>
+  <div class="col-md-2 d-grid">
+    <button class="btn btn-primary">Subir</button>
+  </div>
+  <div class="col-12">
+    <small>Columnas: <code>nombre, ubicacion, cantidad_total, cantidad_disponible, activo (opcional)</code></small>
+  </div>
+</form>
+{% endblock %}
