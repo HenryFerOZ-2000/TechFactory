@@ -1,0 +1,197 @@
+{% extends 'impresoras/base_impresoras.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Penalizados</h2>
+  <a class="btn btn-outline-secondary btn-sm" href="{% url 'impresoras:admin_reservas' %}">← Volver</a>
+</div>
+
+{# ====== MODO TABS (imp_pen + lab_pen) ====== #}
+{% if imp_pen is not None or lab_pen is not None %}
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if imp_pen %}active{% else %}{% if not lab_pen %}active{% endif %}{% endif %}"
+              id="tab-imp" data-bs-toggle="tab" data-bs-target="#pane-imp" type="button" role="tab">
+        Impresoras
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {% if not imp_pen and lab_pen %}active{% endif %}"
+              id="tab-lab" data-bs-toggle="tab" data-bs-target="#pane-lab" type="button" role="tab">
+        Laboratorio
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content border border-top-0 rounded-bottom p-3 bg-white">
+    <!-- Impresoras -->
+    <div class="tab-pane fade {% if imp_pen or not lab_pen %}show active{% endif %}" id="pane-imp" role="tabpanel" aria-labelledby="tab-imp">
+      {% if imp_pen %}
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Hasta</th>
+                <th>Tiempo restante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in imp_pen %}
+                {% with persona=p.persona|default:p %}
+                  {% with hasta=p.hasta|default:persona.penalizado_impresoras_hasta|default:persona.penalizado_lab_hasta %}
+                    <tr>
+                      <td>{{ persona.nombre|default:"—" }}</td>
+                      <td>{{ persona.cedula|default:"—" }}</td>
+                      <td>
+                        {% if hasta %}
+                          {{ hasta|date:"d/m/Y H:i" }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if hasta %}
+                          {{ hasta|timeuntil }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endwith %}
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">Sin penalizados en impresoras.</div>
+      {% endif %}
+    </div>
+
+    <!-- Laboratorio -->
+    <div class="tab-pane fade {% if not imp_pen and lab_pen %}show active{% endif %}" id="pane-lab" role="tabpanel" aria-labelledby="tab-lab">
+      {% if lab_pen %}
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Hasta</th>
+                <th>Tiempo restante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in lab_pen %}
+                {% with persona=p.persona|default:p %}
+                  {% with hasta=p.hasta|default:persona.penalizado_lab_hasta|default:persona.penalizado_impresoras_hasta %}
+                    <tr>
+                      <td>{{ persona.nombre|default:"—" }}</td>
+                      <td>{{ persona.cedula|default:"—" }}</td>
+                      <td>
+                        {% if hasta %}
+                          {{ hasta|date:"d/m/Y H:i" }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if hasta %}
+                          {{ hasta|timeuntil }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endwith %}
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted">Sin penalizados en laboratorio.</div>
+      {% endif %}
+    </div>
+  </div>
+
+{# ====== MODO LISTA ÚNICA (personas + tipo) ====== #}
+{% else %}
+  {# Espera: personas (queryset) y tipo in {'impresoras','lab'} #}
+  {% with titulo|default:"Penalizados" as t %}
+    <h5 class="mt-3 mb-3">{{ t }}</h5>
+  {% endwith %}
+
+  {% if personas %}
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Cédula</th>
+            <th>Hasta</th>
+            <th>Tiempo restante</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for persona in personas %}
+            {% if tipo == 'lab' %}
+              {% with hasta=persona.penalizado_lab_hasta %}
+                <tr>
+                  <td>{{ persona.nombre|default:"—" }}</td>
+                  <td>{{ persona.cedula|default:"—" }}</td>
+                  <td>
+                    {% if hasta %}
+                      {{ hasta|date:"d/m/Y H:i" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if hasta %}
+                      {{ hasta|timeuntil }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endwith %}
+            {% else %}
+              {% with hasta=persona.penalizado_impresoras_hasta %}
+                <tr>
+                  <td>{{ persona.nombre|default:"—" }}</td>
+                  <td>{{ persona.cedula|default:"—" }}</td>
+                  <td>
+                    {% if hasta %}
+                      {{ hasta|date:"d/m/Y H:i" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if hasta %}
+                      {{ hasta|timeuntil }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endwith %}
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-muted">
+      {% if tipo == 'lab' %}
+        Sin penalizados en laboratorio.
+      {% else %}
+        Sin penalizados en impresoras.
+      {% endif %}
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

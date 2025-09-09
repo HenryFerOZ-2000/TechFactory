@@ -2,6 +2,17 @@
 {% load impresoras_extras %}
 
 {% block content %}
+<style>
+  /* Popovers scrolleables (para listas largas en laboratorio) */
+  .popover.pop-scroll { 
+    max-width: 420px;        /* ancho opcional, cámbialo si quieres más estrecho o ancho */
+  }
+  .popover.pop-scroll .popover-body {
+    max-height: 65vh;        /* altura máxima relativa a la ventana */
+    overflow-y: auto;        /* activa scroll vertical */
+  }
+</style>
+
 <div id="calendar-root" data-monday="{{ week_days.0|date:'Y-m-d' }}">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">
@@ -15,16 +26,32 @@
       <a id="prevWeekLink" class="btn btn-outline-secondary btn-sm" href="#">« Semana anterior</a>
       <a id="nextWeekLink" class="btn btn-outline-secondary btn-sm" href="#">Semana siguiente »</a>
 
+      {# === TU FORM ORIGINAL: Exportar mes (todas/por impresora) — AHORA SIN LAB === #}
       <form class="d-flex align-items-center gap-2" method="get" action="{% url 'impresoras:exportar_excel' %}">
         <input type="month" name="month" class="form-control form-control-sm" required>
         <select name="impresora" class="form-select form-select-sm">
           <option value="">Todas</option>
           {% for t in tab_data %}
-            <option value="{{ t.imp.id }}">{{ t.imp.nombre }}</option>
+            {% if not t.is_lab %} {# excluir laboratorio del selector #}
+              <option value="{{ t.imp.id }}">{{ t.imp.nombre }}</option>
+            {% endif %}
           {% endfor %}
         </select>
         <button class="btn btn-success btn-sm">Exportar mes</button>
       </form>
+
+      {# === NUEVO: Exportar SOLO Laboratorio (independiente del selector) === #}
+      <form class="d-flex align-items-center gap-2" method="get" action="{% url 'impresoras:exportar_excel_lab' %}">
+        <input type="month" name="month" class="form-control form-control-sm" required>
+        <button class="btn btn-outline-success btn-sm">Exportar Lab</button>
+      </form>
+
+      {% if is_admin %}
+        {# NUEVO: acceso directo a la vista con pestañas #}
+        <a class="btn btn-dark btn-sm" href="{% url 'impresoras:penalizados_tabs' %}">
+          Penalizados 
+        </a>
+      {% endif %}
     </div>
   </div>
 
@@ -93,6 +120,8 @@
                                               <span class="badge bg-success">Usado</span>
                                             {% elif it.estado == 'reservado' %}
                                               <span class="badge bg-danger">Reservado</span>
+                                            {% elif it.estado == 'penalizado' %}
+                                              <span class="badge bg-dark">Penalizado</span>
                                             {% else %}
                                               <span class="badge bg-secondary">{{ it.get_estado_display|default:"—" }}</span>
                                             {% endif %}
@@ -101,7 +130,7 @@
                                             <div class="small mt-1"><b>Obs:</b> {{ it.tecnico_observaciones|linebreaksbr }}</div>
                                           {% endif %}
 
-                                          <div class="mt-2 d-flex gap-2">
+                                          <div class="mt-2 d-flex flex-wrap gap-2">
                                             <a href="{% url 'impresoras:admin_cancelar_lab' it.id %}?next={{ request.get_full_path|urlencode }}"
                                                class="btn btn-sm btn-outline-danger"
                                                onclick="return confirm('¿Cancelar esta reserva?');">
@@ -118,6 +147,13 @@
                                             {% else %}
                                               <button type="button" class="btn btn-sm btn-success" disabled>Usado</button>
                                             {% endif %}
+
+                                            <form method="post" action="{% url 'impresoras:penalizar_lab' it.id %}">
+                                              {% csrf_token %}
+                                              <input type="hidden" name="days" value="3">
+                                              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                              <button class="btn btn-sm btn-outline-warning">Penalizar</button>
+                                            </form>
                                           </div>
                                         </div>
                                       {% empty %}
@@ -168,6 +204,8 @@
                                                 <span class="badge bg-success">Usado</span>
                                               {% elif it.estado == 'reservado' %}
                                                 <span class="badge bg-danger">Reservado</span>
+                                              {% elif it.estado == 'penalizado' %}
+                                                <span class="badge bg-dark">Penalizado</span>
                                               {% else %}
                                                 <span class="badge bg-secondary">{{ it.get_estado_display|default:"—" }}</span>
                                               {% endif %}
@@ -176,7 +214,7 @@
                                               <div class="small mt-1"><b>Obs:</b> {{ it.tecnico_observaciones|linebreaksbr }}</div>
                                             {% endif %}
 
-                                            <div class="mt-2 d-flex gap-2">
+                                            <div class="mt-2 d-flex flex-wrap gap-2">
                                               <a href="{% url 'impresoras:admin_cancelar_lab' it.id %}?next={{ request.get_full_path|urlencode }}"
                                                  class="btn btn-sm btn-outline-danger"
                                                  onclick="return confirm('¿Cancelar esta reserva?');">
@@ -193,6 +231,13 @@
                                               {% else %}
                                                 <button type="button" class="btn btn-sm btn-success" disabled>Usado</button>
                                               {% endif %}
+
+                                              <form method="post" action="{% url 'impresoras:penalizar_lab' it.id %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="days" value="3">
+                                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                <button class="btn btn-sm btn-outline-warning">Penalizar</button>
+                                              </form>
                                             </div>
                                           </div>
                                         {% endfor %}
@@ -216,47 +261,140 @@
                     {# ===== IMPRESORAS ===== #}
                     {% else %}
                       {% if r %}
+                        {# ----- CELDA RESERVADA ----- #}
                         {% if r.estado == 'reservado' %}
-                          <td class="bg-danger text-white">
-                            <div class="small fw-bold">Reservado</div>
+                          {% if r.tipo == 'BUFFER' %}
+                            <td class="bg-warning">
+                              <div class="small fw-bold">Reservado</div>
+                              <div class="small">
+                                <span class="badge bg-dark">Margen 1 h</span>
+                              </div>
+
+                              {% if is_admin %}
+                                <div class="mt-1 d-flex flex-wrap gap-1 justify-content-center">
+                                  <button type="button" class="btn btn-outline-dark btn-sm"
+                                          data-bs-toggle="popover" data-bs-title="Reserva (Margen)"
+                                          data-bs-container="body" data-bs-html="false"
+                                          data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Tipo: {{ r.tipo|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                    Ver
+                                  </button>
+
+                                  <!-- NUEVO: marcar usado el propio BUFFER con modal -->
+                                  <button type="button"
+                                          class="btn btn-outline-dark btn-sm used-btn"
+                                          data-reserva="{{ r.id }}"
+                                          data-next="{{ request.get_full_path|urlencode }}">
+                                    Marcar usado
+                                  </button>
+
+                                  {% if r.parent %}
+                                    <form method="post" action="{% url 'impresoras:liberar_buffer' r.parent.id %}">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                      <button class="btn btn-outline-dark btn-sm">Liberar margen</button>
+                                    </form>
+                                  {% endif %}
+                                </div>
+                              {% endif %}
+                            </td>
+                          {% else %}
+                            <td class="bg-danger text-white">
+                              <div class="small fw-bold">Reservado</div>
+                              <div class="small">
+                                <span class="badge bg-light text-dark">NORMAL</span>
+                                {% if r.buffers.all %}
+                                  <span class="badge bg-warning text-dark">Margen 1 h</span>
+                                {% endif %}
+                              </div>
+
+                              {% if is_admin %}
+                                <div class="mt-1 d-flex flex-wrap gap-1 justify-content-center">
+
+                                  <button type="button" class="btn btn-outline-light btn-sm"
+                                          data-bs-toggle="popover" data-bs-title="Reserva"
+                                          data-bs-container="body" data-bs-html="false"
+                                          data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Tipo: {{ r.tipo|escape }}&#10;Estado: {{ r.get_estado_display|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                    Ver
+                                  </button>
+
+                                  <a href="{% url 'impresoras:admin_cancelar' r.id %}?next={{ request.get_full_path|urlencode }}"
+                                     class="btn btn-outline-light btn-sm"
+                                     onclick="return confirm('¿Seguro que deseas cancelar esta reserva?');">
+                                    Cancelar
+                                  </a>
+
+                                  <button type="button"
+                                          class="btn btn-outline-light btn-sm used-btn"
+                                          data-reserva="{{ r.id }}"
+                                          data-next="{{ request.get_full_path|urlencode }}">
+                                    Marcar usado
+                                  </button>
+
+                                  <form method="post" action="{% url 'impresoras:penalizar_reserva' r.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="days" value="3">
+                                    <input type="hidden" name="cancelar" value="0">
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="btn btn-sm btn-warning">Penalizar</button>
+                                  </form>
+
+                                  {% if r.buffers.all %}
+                                    <form method="post" action="{% url 'impresoras:liberar_buffer' r.id %}">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                      <button class="btn btn-sm btn-outline-light">Liberar margen</button>
+                                    </form>
+                                  {% endif %}
+                                </div>
+                              {% endif %}
+                            </td>
+                          {% endif %}
+
+                        {# ----- CELDA PENALIZADA ----- #}
+                        {% elif r.estado == 'penalizado' %}
+                          <td class="bg-dark text-white">
+                            <div class="small fw-bold">Penalizado</div>
+                            <div class="small">
+                              <span class="badge bg-light text-dark">{{ r.tipo }}</span>
+                            </div>
                             {% if is_admin %}
                               <div class="mt-1 d-flex flex-wrap gap-1 justify-content-center">
                                 <button type="button" class="btn btn-outline-light btn-sm"
-                                        data-bs-toggle="popover" data-bs-title="Reserva"
+                                        data-bs-toggle="popover" data-bs-title="Reserva (Penalizada)"
                                         data-bs-container="body" data-bs-html="false"
-                                        data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Estado: {{ r.get_estado_display|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                        data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Tipo: {{ r.tipo|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
                                   Ver
                                 </button>
 
-                                <a href="{% url 'impresoras:admin_cancelar' r.id %}?next={{ request.get_full_path|urlencode }}"
-                                   class="btn btn-outline-light btn-sm"
-                                   onclick="return confirm('¿Seguro que deseas cancelar esta reserva?');">
-                                  Cancelar
-                                </a>
-
-                                <button type="button"
-                                        class="btn btn-outline-light btn-sm used-btn"
-                                        data-reserva="{{ r.id }}"
-                                        data-next="{{ request.get_full_path|urlencode }}">
-                                  Marcar usado
-                                </button>
+                                {% if r.buffers.all %}
+                                  <form method="post" action="{% url 'impresoras:liberar_buffer' r.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button class="btn btn-sm btn-outline-light">Liberar margen</button>
+                                  </form>
+                                {% endif %}
                               </div>
                             {% endif %}
                           </td>
 
+                        {# ----- CELDA USADA ----- #}
                         {% elif r.estado == 'usado' %}
                           <td class="bg-success text-white">
                             <div class="small fw-bold">Usado</div>
+                            <div class="small">
+                              <span class="badge bg-light text-dark">{{ r.tipo }}</span>
+                            </div>
                             {% if is_admin %}
                               <button type="button" class="btn btn-outline-light btn-sm mt-1"
                                       data-bs-toggle="popover" data-bs-title="Reserva"
                                       data-bs-container="body" data-bs-html="false"
-                                      data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Estado: {{ r.get_estado_display|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
+                                      data-bs-content="Nombre: {{ r.estudiante_nombre|escape }}&#10;Cédula: {{ r.estudiante_cedula|escape }}&#10;Celular: {{ r.estudiante_celular|escape }}&#10;Carrera: {{ r.estudiante_carrera|escape }}&#10;Tipo: {{ r.tipo|escape }}&#10;Obs: {{ r.tecnico_observaciones|default:'Sin observaciones'|escape }}">
                                 Ver
                               </button>
                             {% endif %}
                           </td>
 
+                        {# ----- CELDA LIBRE ----- #}
                         {% else %}
                           <td>
                             <button type="button"
@@ -454,11 +592,50 @@
     });
   }
 
+  // ---------- Mantener posición tras acciones ----------
+  // (Solo se añadió soporte para formularios dentro de .popover y el modal usedForm)
+  document.addEventListener('submit', function(e){
+    const f = e.target;
+    if (!(f instanceof HTMLFormElement)) return;
+
+    const inTd       = !!f.closest('td');          // tu comprobación original
+    const inPopover  = !!f.closest('.popover');    // NUEVO: formularios en popovers
+    const isUsedForm = f.id === 'usedForm';        // NUEVO: modal de usado
+
+    if (inTd || inPopover || isUsedForm) {
+      sessionStorage.setItem('scrollY', String(window.scrollY || 0));
+    }
+  }, true);
+
+  window.addEventListener('load', function(){
+    const y = sessionStorage.getItem('scrollY');
+    if (y !== null) {
+      sessionStorage.removeItem('scrollY');
+      window.scrollTo(0, parseInt(y, 10) || 0);
+    }
+  });
+
   // ---------- Inicio ----------
   document.addEventListener('DOMContentLoaded', function () {
+    // Prellenar inputs month con el mes actual si vienen vacíos
+    document.querySelectorAll('input[type="month"]').forEach(inp => {
+      if (!inp.value) {
+        const dt = new Date();
+        const ym = String(dt.getFullYear()) + '-' + String(dt.getMonth()+1).padStart(2,'0');
+        inp.value = ym;
+      }
+    });
+
     // Popovers clásicos
     document.querySelectorAll('[data-bs-toggle="popover"]').forEach((el) => {
-      new bootstrap.Popover(el, { html: true, sanitize: false, container: 'body', trigger: 'click' });
+      new bootstrap.Popover(el, {
+        html: true,
+        sanitize: false,
+        container: 'body',
+        trigger: 'click',
+        customClass: 'pop-scroll',  // <- activa el CSS de scroll
+        boundary: 'viewport'        // <- evita que se salga de pantalla
+      });
       el.addEventListener('shown.bs.popover', () => {
         document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(other => {
           if (other !== el) {
@@ -479,7 +656,9 @@
         sanitize: false,
         container: 'body',
         trigger: 'click',
-        content: src.innerHTML
+        content: src.innerHTML,
+        customClass: 'pop-scroll',  // <- activa el CSS de scroll
+        boundary: 'viewport'
       });
       el.addEventListener('shown.bs.popover', () => {
         document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(other => {
@@ -540,7 +719,7 @@
       new bootstrap.Modal(document.getElementById('usedModal')).show();
     });
 
-    // Delegado: "Marcar usado" de LAB (con observaciones)
+    // Delegado: "Marcar usado" de LAB
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.used-lab-btn');
       if (!btn) return;
@@ -548,14 +727,12 @@
       const reservaId = btn.dataset.reserva;
       const nextEncoded = btn.dataset.next;
 
-      const form = document.getElementById('usedForm'); // reutilizamos el mismo modal
+      const form = document.getElementById('usedForm');
       const base = "{% url 'impresoras:admin_marcar_usado_lab' 0 %}".replace("/0/", "/" + reservaId + "/");
       form.action = base + "?next=" + nextEncoded;
       document.getElementById('usedNext').value = decodeURIComponent(nextEncoded);
 
-      // Cierra popovers antes de abrir el modal
       hideAllPopovers();
-
       new bootstrap.Modal(document.getElementById('usedModal')).show();
     });
   });
@@ -603,4 +780,6 @@
     new bootstrap.Modal(document.getElementById('labReserveModal')).show();
   }
 </script>
+
+
 {% endblock %}

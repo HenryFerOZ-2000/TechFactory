@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 
+# models.py
 class Persona(models.Model):
     CARRERAS = [
         ('Robotica e IA', 'Robotica e IA'),
@@ -19,8 +20,16 @@ class Persona(models.Model):
     celular = models.CharField(max_length=20, blank=True, default='')
     carrera = models.CharField(max_length=120, choices=CARRERAS)
 
+    # NUEVO (no quites penalized_until si ya existe/lo usabas en otros lados)
+    penalizado_impresoras_hasta = models.DateTimeField(null=True, blank=True)
+    penalizado_lab_hasta = models.DateTimeField(null=True, blank=True)
+
+    no_show_count = models.PositiveIntegerField(default=0)
+    penalized_until = models.DateTimeField(null=True, blank=True)  # legado si ya lo tenías
+
     def __str__(self):
         return f"{self.nombre} ({self.cedula})"
+
 
 class Componente(models.Model):
     nombre = models.CharField(max_length=200, unique=True)
