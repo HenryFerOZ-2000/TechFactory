@@ -87,17 +87,14 @@ WSGI_APPLICATION = 'TechFactory.wsgi.application'
 
 import dj_database_url
 
-import dj_database_url
-import os
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.getenv("DATABASE_URL"),
-        conn_max_age=600,
-        ssl_require=True
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,                    # conexiones persistentes (mejor performance en prod)
+        ssl_require=True if os.getenv("RENDER") == "1" else False,
     )
 }
-
 
 
 # Password validation
