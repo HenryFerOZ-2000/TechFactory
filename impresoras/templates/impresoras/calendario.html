@@ -592,29 +592,6 @@
     });
   }
 
-  // ====== NUEVO: helpers para sincronizar el parámetro "next" con la URL real ======
-  function currentPathWithQuery() {
-    const u = new URL(window.location);
-    return u.pathname + u.search; // conserva ?imp=…&week=…
-  }
-  function syncNextHiddenInputs(root) {
-    const scope = root || document;
-    scope.querySelectorAll('input[name="next"]').forEach(inp => {
-      inp.value = currentPathWithQuery();
-    });
-  }
-  function syncNextLinks(root) {
-    const scope = root || document;
-    scope.querySelectorAll('a[href*="next="]').forEach(a => {
-      try {
-        const href = new URL(a.getAttribute('href'), window.location.origin);
-        href.searchParams.set('next', currentPathWithQuery());
-        a.setAttribute('href', href.pathname + href.search);
-      } catch (_) { /* ignore relative edge cases */ }
-    });
-  }
-  // ================================================================================
-
   // ---------- Mantener posición tras acciones ----------
   // (Solo se añadió soporte para formularios dentro de .popover y el modal usedForm)
   document.addEventListener('submit', function(e){
@@ -716,10 +693,6 @@
         u.searchParams.set('imp', id);
         history.replaceState(null, '', u.pathname + u.search);
         updateWeekLinks();
-
-        // === NUEVO: resync de next al cambiar de pestaña (URL cambia con replaceState)
-        syncNextHiddenInputs(document);
-        syncNextLinks(document);
       });
     });
 
@@ -731,26 +704,12 @@
     const lm = document.getElementById('labReserveModal');
     if (lm) lm.addEventListener('show.bs.modal', hideAllPopovers);
 
-    // === NUEVO: cuando se muestre cualquier popover, sincroniza sus formularios/enlaces internos
-    document.addEventListener('shown.bs.popover', () => {
-      document.querySelectorAll('.popover').forEach(pop => {
-        syncNextHiddenInputs(pop);
-        syncNextLinks(pop);
-      });
-    });
-
-    // === NUEVO: sync inicial de todos los next en la página
-    syncNextHiddenInputs(document);
-    syncNextLinks(document);
-
     // Delegado: "Marcar usado" de impresoras
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.used-btn');
       if (!btn) return;
       const reservaId = btn.dataset.reserva;
-
-      // === NUEVO: siempre tomar la URL real actual (ignorar data-next del server)
-      const nextEncoded = encodeURIComponent(currentPathWithQuery());
+      const nextEncoded = btn.dataset.next;
 
       const form = document.getElementById('usedForm');
       const base = "{% url 'impresoras:admin_marcar_usado' 0 %}".replace("/0/", "/" + reservaId + "/");
@@ -766,9 +725,7 @@
       if (!btn) return;
 
       const reservaId = btn.dataset.reserva;
-
-      // === NUEVO: siempre tomar la URL real actual (ignorar data-next del server)
-      const nextEncoded = encodeURIComponent(currentPathWithQuery());
+      const nextEncoded = btn.dataset.next;
 
       const form = document.getElementById('usedForm');
       const base = "{% url 'impresoras:admin_marcar_usado_lab' 0 %}".replace("/0/", "/" + reservaId + "/");
@@ -823,3 +780,6 @@
     new bootstrap.Modal(document.getElementById('labReserveModal')).show();
   }
 </script>
+
+
+{% endblock %}
