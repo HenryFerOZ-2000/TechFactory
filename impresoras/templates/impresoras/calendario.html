@@ -547,6 +547,10 @@
   </div>
 </div>
 
+{# prepara URLs seguras (fuera del JS) #}
+{% url 'impresoras:admin_marcar_usado' 0 as __admin_usado_zero %}
+{% url 'impresoras:admin_marcar_usado_lab' 0 as __admin_usado_lab_zero %}
+
 <script>
   // ---------- Utilidades ----------
   function fmtDate(d) { return d.toISOString().slice(0,10); }
@@ -592,16 +596,36 @@
     });
   }
 
+  // ====== NUEVO: helpers para sincronizar "next" con la URL real ======
+  function currentPathWithQuery() {
+    const u = new URL(window.location);
+    return u.pathname + u.search; // conserva ?imp=…&week=…
+  }
+  function syncNextHiddenInputs(root) {
+    const scope = root || document;
+    scope.querySelectorAll('input[name="next"]').forEach(inp => {
+      inp.value = currentPathWithQuery();
+    });
+  }
+  function syncNextLinks(root) {
+    const scope = root || document;
+    scope.querySelectorAll('a[href*="next="]').forEach(a => {
+      try {
+        const href = new URL(a.getAttribute('href'), window.location.origin);
+        href.searchParams.set('next', currentPathWithQuery());
+        a.setAttribute('href', href.pathname + href.search);
+      } catch (_) {}
+    });
+  }
+  // ====================================================================
+
   // ---------- Mantener posición tras acciones ----------
-  // (Solo se añadió soporte para formularios dentro de .popover y el modal usedForm)
   document.addEventListener('submit', function(e){
     const f = e.target;
     if (!(f instanceof HTMLFormElement)) return;
-
-    const inTd       = !!f.closest('td');          // tu comprobación original
-    const inPopover  = !!f.closest('.popover');    // NUEVO: formularios en popovers
-    const isUsedForm = f.id === 'usedForm';        // NUEVO: modal de usado
-
+    const inTd       = !!f.closest('td');
+    const inPopover  = !!f.closest('.popover');
+    const isUsedForm = f.id === 'usedForm';
     if (inTd || inPopover || isUsedForm) {
       sessionStorage.setItem('scrollY', String(window.scrollY || 0));
     }
@@ -617,7 +641,7 @@
 
   // ---------- Inicio ----------
   document.addEventListener('DOMContentLoaded', function () {
-    // Prellenar inputs month con el mes actual si vienen vacíos
+    // Prellenar inputs month
     document.querySelectorAll('input[type="month"]').forEach(inp => {
       if (!inp.value) {
         const dt = new Date();
@@ -633,8 +657,8 @@
         sanitize: false,
         container: 'body',
         trigger: 'click',
-        customClass: 'pop-scroll',  // <- activa el CSS de scroll
-        boundary: 'viewport'        // <- evita que se salga de pantalla
+        customClass: 'pop-scroll',
+        boundary: 'viewport'
       });
       el.addEventListener('shown.bs.popover', () => {
         document.querySelectorAll('[data-bs-toggle="popover"],[data-popover-id]').forEach(other => {
@@ -657,7 +681,7 @@
         container: 'body',
         trigger: 'click',
         content: src.innerHTML,
-        customClass: 'pop-scroll',  // <- activa el CSS de scroll
+        customClass: 'pop-scroll',
         boundary: 'viewport'
       });
       el.addEventListener('shown.bs.popover', () => {
@@ -693,6 +717,9 @@
         u.searchParams.set('imp', id);
         history.replaceState(null, '', u.pathname + u.search);
         updateWeekLinks();
+        // resync de next al cambiar de pestaña
+        syncNextHiddenInputs(document);
+        syncNextLinks(document);
       });
     });
 
@@ -704,16 +731,34 @@
     const lm = document.getElementById('labReserveModal');
     if (lm) lm.addEventListener('show.bs.modal', hideAllPopovers);
 
+    // Cuando se muestre cualquier popover, sincroniza sus formularios/enlaces internos
+    document.addEventListener('shown.bs.popover', () => {
+      document.querySelectorAll('.popover').forEach(pop => {
+        syncNextHiddenInputs(pop);
+        syncNextLinks(pop);
+      });
+    });
+
+    // sync inicial de todos los next en la página
+    syncNextHiddenInputs(document);
+    syncNextLinks(document);
+
+    // ========= URLs base seguras para "usado" (inyectadas por Django, escapadas JS) =========
+    const ADMIN_USADO_BASE     = "{{ __admin_usado_zero|escapejs }}";      // .../admin/marcar-usado/0/
+    const ADMIN_USADO_LAB_BASE = "{{ __admin_usado_lab_zero|escapejs }}"; // .../lab/admin/usado/0/
+    // ========================================================================================
+
     // Delegado: "Marcar usado" de impresoras
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.used-btn');
       if (!btn) return;
+
       const reservaId = btn.dataset.reserva;
-      const nextEncoded = btn.dataset.next;
+      const nextEncoded = encodeURIComponent(currentPathWithQuery());
 
       const form = document.getElementById('usedForm');
-      const base = "{% url 'impresoras:admin_marcar_usado' 0 %}".replace("/0/", "/" + reservaId + "/");
-      form.action = base + "?next=" + nextEncoded;
+      const base = ADMIN_USADO_BASE;
+      form.action = base.replace("/0/", "/" + reservaId + "/") + "?next=" + nextEncoded;
       document.getElementById('usedNext').value = decodeURIComponent(nextEncoded);
 
       new bootstrap.Modal(document.getElementById('usedModal')).show();
@@ -725,11 +770,11 @@
       if (!btn) return;
 
       const reservaId = btn.dataset.reserva;
-      const nextEncoded = btn.dataset.next;
+      const nextEncoded = encodeURIComponent(currentPathWithQuery());
 
       const form = document.getElementById('usedForm');
-      const base = "{% url 'impresoras:admin_marcar_usado_lab' 0 %}".replace("/0/", "/" + reservaId + "/");
-      form.action = base + "?next=" + nextEncoded;
+      const base = ADMIN_USADO_LAB_BASE;
+      form.action = base.replace("/0/", "/" + reservaId + "/") + "?next=" + nextEncoded;
       document.getElementById('usedNext').value = decodeURIComponent(nextEncoded);
 
       hideAllPopovers();
