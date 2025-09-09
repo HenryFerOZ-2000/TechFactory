@@ -14,32 +14,38 @@ import dj_database_url
 from pathlib import Path
 
 # --- ⬇️ AÑADIDOS PARA DEPLOY (sin tocar tu config actual) ⬇️ ---
-# Estos ajustes solo se activan cuando corres en Render u otro entorno
-# donde definas RENDER=1 (o puedes usar cualquier variable que prefieras).
-
-
-
+# Variables de entorno útiles
+RENDER_FLAG = os.getenv("RENDER", "0") == "1"     # Pon RENDER=1 en Render
+SERVICE_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()  # p.ej. myapp.onrender.com
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-
-
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#d@7q9_8#b_p80t(ij4$1-t=xk^^tnp&uk#nf3jq=lh@#xx_+j'
+SECRET_KEY = os.getenv("SECRET_KEY", 'django-insecure-#d@7q9_8#b_p80t(ij4$1-t=xk^^tnp&uk#nf3jq=lh@#xx_+j')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Si estás en Render, por defecto DEBUG=False; local: True (a menos que lo cambies por env)
+if RENDER_FLAG:
+    DEBUG = os.getenv("DEBUG", "False") == "True"
+else:
+    DEBUG = os.getenv("DEBUG", "True") == "True"
 
+# Hosts permitidos: toma de env ALLOWED_HOSTS (coma-separado), o añade render host si existe
 ALLOWED_HOSTS = []
-
+_env_hosts = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if _env_hosts:
+    ALLOWED_HOSTS.extend(_env_hosts)
+if SERVICE_HOST and SERVICE_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(SERVICE_HOST)
+# fallback en desarrollo
+if not ALLOWED_HOSTS and not RENDER_FLAG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -81,25 +87,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'TechFactory.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-import dj_database_url
-
-
+# Database (config base)
+# Si no hay DATABASE_URL, usa SQLite local. En Render lo normal es que exista DATABASE_URL (Postgres).
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,                    # conexiones persistentes (mejor performance en prod)
-        ssl_require=True if os.getenv("RENDER") == "1" else False,
+        ssl_require=True if RENDER_FLAG else False,
     )
 }
 
-
 # Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -115,27 +113,16 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
+# Static files
 STATIC_URL = 'static/'
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MASTER_PASSWORD = 'TechFactory2025'  # Password for clearing all records
@@ -148,7 +135,6 @@ SINGLE_USER_USERNAME = "techfactory"
 SINGLE_USER_PASSWORD = "12345"
 
 # Excepciones de login por nombre de ruta (namespace:name)
-
 LOGIN_EXEMPT_URLS = {
      # landing pública
     "landing", "base:landing",
@@ -165,7 +151,7 @@ LOGIN_EXEMPT_URLS = {
     'impresoras:exportar_excel',
 }
 
-# Middleware: agrega el nuestro después de AuthenticationMiddleware y SessionMiddleware
+# Middleware (de nuevo, como lo tenías) — la última asignación es la efectiva.
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -179,9 +165,10 @@ MIDDLEWARE = [
 # (opcional) sesión de 8h
 SESSION_COOKIE_AGE = 8 * 60 * 60
 
-# STATIC/MEDIA (si no los tienes ya)
+# STATIC/MEDIA
 STATIC_URL = "/static/"
 MEDIA_URL  = "/media/"
+
 # settings.py
 LOGIN_EXEMPT_URLS = {
     "base:login",
@@ -198,27 +185,27 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 # --- AÑADIDOS PARA DEPLOY EN RENDER (colocar al FINAL del archivo) ---
-import os
-import dj_database_url
+# ⚠️ No borramos nada, solo ajustamos cuando RENDER=1
+if RENDER_FLAG:
+    # DEBUG ya ajustado arriba desde env
 
-if os.getenv("RENDER") == "1":
-    # DEBUG y hosts
-    DEBUG = os.getenv("DEBUG", "False") == "True"
-
-    # ALLOWED_HOSTS: no pisamos lo que ya tienes; solo añadimos comodín y onrender
+    # ALLOWED_HOSTS: conserva los ya definidos y añade el host de Render si no está
     _hosts_actuales = list(globals().get("ALLOWED_HOSTS", []))
-    for h in ["*", "techfactory.onrender.com"]:
-        if h not in _hosts_actuales:
-            _hosts_actuales.append(h)
+    if SERVICE_HOST and SERVICE_HOST not in _hosts_actuales:
+        _hosts_actuales.append(SERVICE_HOST)
+    if "*" not in _hosts_actuales and os.getenv("ALLOW_ALL_HOSTS", "0") == "1":
+        _hosts_actuales.append("*")
     ALLOWED_HOSTS = _hosts_actuales
 
-    # CSRF
+    # CSRF Trusted (añadimos *.onrender.com y el host concreto si existe)
     _csrf = list(globals().get("CSRF_TRUSTED_ORIGINS", []))
     if "https://*.onrender.com" not in _csrf:
         _csrf.append("https://*.onrender.com")
+    if SERVICE_HOST and f"https://{SERVICE_HOST}" not in _csrf:
+        _csrf.append(f"https://{SERVICE_HOST}")
     CSRF_TRUSTED_ORIGINS = _csrf
 
-    # Insertar WhiteNoise sin fallar si MIDDLEWARE aún no estaba
+    # Insertar WhiteNoise después de SecurityMiddleware
     _mw = list(globals().get("MIDDLEWARE", []))
     if "whitenoise.middleware.WhiteNoiseMiddleware" not in _mw:
         try:
@@ -230,16 +217,14 @@ if os.getenv("RENDER") == "1":
     MIDDLEWARE = _mw
 
     # Staticfiles en producción
-    from pathlib import Path
-    BASE_DIR = Path(__file__).resolve().parent.parent
     STATIC_URL = "/static/"
     STATIC_ROOT = BASE_DIR / "staticfiles"
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-    # Base de datos: usa DATABASE_URL si existe, si no, deja tu SQLite
+    # Base de datos: si hay DATABASE_URL, úsalo (Postgres). Si no, SQLite.
     DATABASES["default"] = dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        default=os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
         conn_max_age=600,
-        ssl_require=False
+        ssl_require=True if os.getenv("DATABASE_URL", "").startswith("postgres://") or os.getenv("DATABASE_URL", "").startswith("postgresql://") else False
     )
 # --- FIN AÑADIDOS PARA RENDER ---
