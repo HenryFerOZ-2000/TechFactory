@@ -157,7 +157,7 @@ def monday_of_week(d: date) -> date:
 
 def generate_week_days(pivot: date):
     monday = monday_of_week(pivot)
-    return [monday + timedelta(days=i) for i in range(7)]  # Lun a dom
+    return [monday + timedelta(days=i) for i in range(6)]  # Lun a sabado
 
 def reservations_map(impresora, dias):
     qs = Reserva.objects.filter(impresora=impresora, fecha__in=dias).exclude(estado='cancelado')
@@ -384,7 +384,7 @@ def crear_reserva_lab(request):
         messages.error(request, "No hay cupos disponibles en esa franja.")
         return redirect(request.POST.get('next') or "impresoras:calendario")
 
-    # ------------ NUEVO: checar penalización y crear Persona ------------
+    # ------------ Checar penalización y crear Persona ------------
     ced = form.cleaned_data.get("estudiante_cedula") or ""
     nom = form.cleaned_data.get("estudiante_nombre") or ""
     persona_existente = _find_persona(ced, nom)
@@ -398,7 +398,10 @@ def crear_reserva_lab(request):
         celular=form.cleaned_data.get("estudiante_celular") or "",
         carrera=form.cleaned_data.get("estudiante_carrera") or "",
     )
-    # ------------ FIN NUEVO --------------------------------------------
+    # -------------------------------------------------------------
+
+    # Actividad (nuevo campo)
+    actividad = (form.cleaned_data.get("actividad") or "").strip()
 
     LabReserva.objects.create(
         fecha=f, hora=h,
@@ -406,11 +409,11 @@ def crear_reserva_lab(request):
         estudiante_cedula=form.cleaned_data["estudiante_cedula"],
         estudiante_celular=form.cleaned_data["estudiante_celular"],
         estudiante_carrera=form.cleaned_data["estudiante_carrera"],
+        actividad=actividad,
         estado='reservado'
     )
     messages.success(request, "Reserva de laboratorio creada correctamente.")
     return redirect(request.POST.get('next') or "impresoras:calendario")
-
 
 def crear_reserva(request):
     if request.method != "POST":
@@ -437,7 +440,7 @@ def crear_reserva(request):
         return redirect(next_url)
 
     # Lun–Vie y rango de horas permitidas
-    if f.weekday() > 4 or h not in HOURS_RANGE:
+    if f.weekday() > 5 or h not in HOURS_RANGE:
         messages.error(request, "Horario fuera de rango (Lun–Vie 08:00–21:00).")
         return redirect(_next(request, "impresoras:calendario"))
 
@@ -1104,6 +1107,9 @@ def exportar_excel_lab(request):
               .exclude(estado="cancelado"))
 
     # Prepara filas (con columnas técnicas para ordenar)
+    # Estructura de cada fila:
+    # 0 Recurso | 1 Fecha | 2 HoraTxt | 3 EstadoDisp | 4 Nombre | 5 Cédula | 6 Celular | 7 Carrera
+    # 8 Actividad | 9 Observaciones | 10 Creado | 11 hora_num (técnico) | 12 estado_raw (técnico)
     rows_lab = []
     for r in qs_lab:
         creado_local = timezone.localtime(r.creado_en).replace(tzinfo=None) if getattr(r, "creado_en", None) else None
@@ -1112,10 +1118,11 @@ def exportar_excel_lab(request):
             f"{r.hora:02d}:00 - {r.hora+1:02d}:00",
             r.get_estado_display() if hasattr(r, "get_estado_display") else (r.estado or "").title(),
             r.estudiante_nombre, r.estudiante_cedula, r.estudiante_celular, r.estudiante_carrera,
+            (getattr(r, "actividad", "") or ""),  # 👈 NUEVO
             (getattr(r, "tecnico_observaciones", "") or "").strip().replace("\r\n", " ").replace("\n", " "),
             creado_local,
-            r.hora,           # idx 10: hora_num (técnico)
-            (r.estado or "").lower(),  # idx 11: estado_raw (técnico)
+            r.hora,                               # idx 11: hora_num (técnico)
+            (r.estado or "").lower(),             # idx 12: estado_raw (técnico)
         ))
 
     # ====== Crea workbook ======
@@ -1125,16 +1132,17 @@ def exportar_excel_lab(request):
     ws_lab_det = wb.active
     ws_lab_det.title = "Detalle Lab"
 
-    hdr = ["Recurso", "Fecha", "Hora", "Estado", "Nombre", "Cédula", "Celular", "Carrera", "Observaciones", "Creado"]
+    hdr = ["Recurso", "Fecha", "Hora", "Estado", "Nombre", "Cédula", "Celular", "Carrera",
+           "Actividad", "Observaciones", "Creado"]  # 👈 Actividad añadida
     ws_lab_det.append(hdr)
 
     estado_order = {"usado": 0, "reservado": 1}
     rows_lab_sorted = sorted(
         rows_lab,
-        key=lambda x: (x[1], x[10], estado_order.get(x[11], 99), x[4] or "")
+        key=lambda x: (x[1], x[11], estado_order.get(x[12], 99), x[4] or "")
     )
     for r in rows_lab_sorted:
-        ws_lab_det.append(r[:10])  # solo columnas visibles
+        ws_lab_det.append(r[:11])  # ahora son 11 columnas visibles
 
     # Formatos y estilos
     header_fill = PatternFill("solid", fgColor="1F4E78")
@@ -1146,8 +1154,8 @@ def exportar_excel_lab(request):
         c.font = header_font
         c.alignment = Alignment(horizontal="center", vertical="center")
 
-    # formato de "Creado"
-    for cell in ws_lab_det["J"][1:]:
+    # formato de "Creado" -> columna K
+    for cell in ws_lab_det["K"][1:]:
         if isinstance(cell.value, datetime):
             cell.number_format = "yyyy-mm-dd hh:mm"
 
@@ -1160,7 +1168,7 @@ def exportar_excel_lab(request):
         ws_lab_det.column_dimensions[col_cells[0].column_letter].width = min(max(length + 2, 12), 40)
 
     if ws_lab_det.max_row > 1:
-        t2 = Table(displayName="TablaDetalleLab", ref=f"A1:J{ws_lab_det.max_row}")
+        t2 = Table(displayName="TablaDetalleLab", ref=f"A1:K{ws_lab_det.max_row}")
         t2.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
         ws_lab_det.add_table(t2)
     else:
@@ -1171,13 +1179,20 @@ def exportar_excel_lab(request):
 
     # ---- Hoja 2: Asistencia Lab (Usados) ----
     ws_lab_used = wb.create_sheet("Asistencia Lab (Usados)")
-    used_hdr = ["Fecha", "Hora", "Nombre", "Cédula", "Celular", "Carrera", "Observaciones", "Creado"]
+    used_hdr = ["Fecha", "Hora", "Nombre", "Cédula", "Celular", "Carrera",
+                "Actividad", "Observaciones", "Creado"]  # 👈 Actividad añadida
     ws_lab_used.append(used_hdr)
 
-    rows_lab_used = [r for r in rows_lab if r[11] == "usado"]
-    rows_lab_used = sorted(rows_lab_used, key=lambda r: (r[1], r[10], r[4] or ""))
+    rows_lab_used = [r for r in rows_lab if r[12] == "usado"]  # estado_raw ahora en 12
+    rows_lab_used = sorted(rows_lab_used, key=lambda r: (r[1], r[11], r[4] or ""))  # hora_num en 11
     for r in rows_lab_used:
-        ws_lab_used.append([r[1], r[2], r[4], r[5], r[6], r[7], r[8], r[9]])
+        ws_lab_used.append([
+            r[1], r[2],              # Fecha, Hora (texto)
+            r[4], r[5], r[6], r[7],  # Nombre, Cédula, Celular, Carrera
+            r[8],                    # Actividad
+            r[9],                    # Observaciones
+            r[10],                   # Creado
+        ])
 
     for c in ws_lab_used[1]:
         c.fill = header_fill
@@ -1193,7 +1208,7 @@ def exportar_excel_lab(request):
         ws_lab_used.column_dimensions[col_cells[0].column_letter].width = min(max(length + 2, 12), 40)
 
     if ws_lab_used.max_row > 1:
-        t4 = Table(displayName="TablaAsistenciaLab", ref=f"A1:H{ws_lab_used.max_row}")
+        t4 = Table(displayName="TablaAsistenciaLab", ref=f"A1:I{ws_lab_used.max_row}")
         t4.tableStyleInfo = TableStyleInfo(name="TableStyleMedium7", showRowStripes=True)
         ws_lab_used.add_table(t4)
     else:
@@ -1206,8 +1221,8 @@ def exportar_excel_lab(request):
     resumen = defaultdict(lambda: {"total": 0, "usados": 0, "reservados": 0})
     for r in rows_lab:
         fecha = r[1]
-        hora_num = r[10]
-        estado = r[11]
+        hora_num = r[11]     # antes 10
+        estado = r[12]       # antes 11
         resumen[(fecha, hora_num)]["total"] += 1
         if estado == "usado":
             resumen[(fecha, hora_num)]["usados"] += 1

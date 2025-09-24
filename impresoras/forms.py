@@ -19,4 +19,14 @@ class PublicLabReservationForm(forms.Form):
     estudiante_cedula = forms.CharField(required=False)
     estudiante_celular = forms.CharField(required=False)
     estudiante_carrera = forms.ChoiceField(choices=Persona.CARRERAS)
+    actividad = forms.CharField(
+        label="Actividad a realizar",
+        required=True,                 # ponlo False si quieres permitir vacío
+        max_length=1000,
+        widget=forms.Textarea(attrs={
+            "rows": 3,
+            "placeholder": "Escribe la actividad que vas a realizar en el laboratorio..."
+        })
+    )
+
 

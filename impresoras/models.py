@@ -104,6 +104,7 @@ class LabReserva(models.Model):
     # misma franja que impresoras
     fecha = models.DateField()
     hora = models.PositiveIntegerField()  # 8..20 (08–21)
+    
 
     # datos de estudiante
     estudiante_nombre = models.CharField(max_length=120)
@@ -114,6 +115,7 @@ class LabReserva(models.Model):
         choices=Persona.CARRERAS,
         default=Persona.CARRERAS[0][0]
     )
+    actividad = models.TextField(blank=True, default="")  # 👈 NUEVO
 
     estado = models.CharField(max_length=12, choices=ESTADOS, default='reservado')
     creado_en = models.DateTimeField(auto_now_add=True)

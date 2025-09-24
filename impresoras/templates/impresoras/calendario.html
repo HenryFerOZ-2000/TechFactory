@@ -199,6 +199,7 @@
                                             <div class="small"><b>Cédula:</b> {{ it.estudiante_cedula|default:"—"|escape }}</div>
                                             <div class="small"><b>Celular:</b> {{ it.estudiante_celular|default:"—"|escape }}</div>
                                             <div class="small"><b>Carrera:</b> {{ it.estudiante_carrera|default:"—"|escape }}</div>
+                                            <div class="small"><b>Actividad:</b> {{ it.actividad|default:"—"|escape }}</div>
                                             <div class="small"><b>Estado:</b>
                                               {% if it.estado == 'usado' %}
                                                 <span class="badge bg-success">Usado</span>
@@ -539,6 +540,11 @@
             {% endfor %}
           </select>
         </div>
+      </div>
+            <div>
+        <label class="form-label">Actividad</label>
+        <textarea class="form-control" name="actividad" rows=""
+                  placeholder="Ej.: Proyecto de clase, impresión 3D, etc." required></textarea>
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary">Reservar</button>
