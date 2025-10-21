@@ -7,6 +7,7 @@ HOURS_RANGE = list(range(8, 21))  # 8..20 inclusive
 
 class Impresora(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
+    disponible = models.BooleanField(default=True)  # ✅ NUEVO campo para habilitar/deshabilitar
 
     def __str__(self):
         return self.nombre
@@ -104,7 +105,6 @@ class LabReserva(models.Model):
     # misma franja que impresoras
     fecha = models.DateField()
     hora = models.PositiveIntegerField()  # 8..20 (08–21)
-    
 
     # datos de estudiante
     estudiante_nombre = models.CharField(max_length=120)
@@ -128,7 +128,7 @@ class LabReserva(models.Model):
 
     def __str__(self):
         return f"LAB {self.fecha} {self.hora:02d}:00 ({self.get_estado_display()})"
-    
+
 
 class Penalizacion(models.Model):
     AMBITOS = [
@@ -144,5 +144,3 @@ class Penalizacion(models.Model):
 
     def __str__(self):
         return f"{self.persona} - {self.ambito} hasta {self.hasta}"
-
-    

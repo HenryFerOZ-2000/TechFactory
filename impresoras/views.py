@@ -164,9 +164,14 @@ def reservations_map(impresora, dias):
     return {(r.fecha, r.hora): r for r in qs}
 
 def list_impresoras():
-    # 0 = impresoras, 1 = laboratorio → así el lab queda al final
+    """
+    Devuelve las impresoras (y laboratorio) ordenadas, 
+    mostrando solo las que estén disponibles.
+    El laboratorio se muestra al final.
+    """
     return list(
         Impresora.objects
+        .filter(disponible=True)  # ✅ solo impresoras habilitadas desde el admin
         .annotate(
             is_lab=Case(
                 When(nombre__iexact=LAB_NAME, then=1),
@@ -176,6 +181,7 @@ def list_impresoras():
         )
         .order_by('is_lab', 'nombre')
     )
+
 
 # ---------------------------------------------------------------------
 # Mapas de reservas LAB

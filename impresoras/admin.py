@@ -3,8 +3,10 @@ from .models import Impresora, Reserva
 
 @admin.register(Impresora)
 class ImpresoraAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nombre')
+    list_display = ('id', 'nombre', 'disponible')  # ✅ añadimos la columna
+    list_editable = ('disponible',)                # ✅ editable directamente en la lista
     search_fields = ('nombre',)
+
 
 @admin.register(Reserva)
 class ReservaAdmin(admin.ModelAdmin):
