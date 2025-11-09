@@ -1,46 +1,17 @@
+# Standard library
 import calendar
-from random import randint
+from collections import defaultdict
 from datetime import date, timedelta, datetime
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.timezone import now
 from io import BytesIO
+from random import randint
+from types import SimpleNamespace
+
+# Third-party
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.formatting.rule import Rule
-from openpyxl.styles.differential import DifferentialStyle
-from django.utils import timezone
-from django.utils import timezone  # ya lo tienes importado arriba
-from base.models import Persona
-from django.contrib.admin.views.decorators import staff_member_required
-from io import BytesIO
-from openpyxl import Workbook
-from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import Font, Alignment, PatternFill
-from django.utils import timezone
-from io import BytesIO
-from openpyxl import Workbook
-from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from django.utils import timezone
-from io import BytesIO
-from openpyxl import Workbook
-from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from django.utils import timezone
-from .models import Impresora, Reserva, HOURS_RANGE
-from .forms import PublicReservationForm
-from django.shortcuts import redirect
-from django.urls import reverse
-from types import SimpleNamespace
-from .models import Impresora, Reserva, LabReserva, HOURS_RANGE
-from .forms import PublicReservationForm, PublicLabReservationForm
-from datetime import date, timedelta, datetime
-import calendar
-from io import BytesIO
+
+# Django
 from django import template
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -51,9 +22,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.timezone import now
-from openpyxl import Workbook
-from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+# Local apps
 from base.models import Persona
 from .forms import PublicReservationForm, PublicLabReservationForm
 from .models import Impresora, Reserva, LabReserva, HOURS_RANGE
@@ -63,8 +33,6 @@ LAB_NAME = "Laboratorio Tech Factory"
 LAB_CAPACITY = 15
 
 register = template.Library()
-from django.contrib.admin.views.decorators import staff_member_required
-from base.models import Persona
 
 
 @staff_member_required
@@ -166,12 +134,12 @@ def reservations_map(impresora, dias):
 def list_impresoras():
     """
     Devuelve las impresoras (y laboratorio) ordenadas, 
-    mostrando solo las que estén disponibles.
+    incluyendo todas las impresoras (disponibles y deshabilitadas).
     El laboratorio se muestra al final.
     """
     return list(
         Impresora.objects
-        .filter(disponible=True)  # ✅ solo impresoras habilitadas desde el admin
+        .all()  # ✅ incluye todas las impresoras (disponibles y deshabilitadas)
         .annotate(
             is_lab=Case(
                 When(nombre__iexact=LAB_NAME, then=1),
@@ -348,6 +316,7 @@ def _build_context(pivot_date: date, admin: bool):
         "form": PublicReservationForm(),
         "lab_name": LAB_NAME,
         "lab_capacity": LAB_CAPACITY,
+        "now": timezone.localtime(),
     }
 
 # ---------------------------------------------------------------------
@@ -419,7 +388,9 @@ def crear_reserva_lab(request):
         estado='reservado'
     )
     messages.success(request, "Reserva de laboratorio creada correctamente.")
-    return redirect(request.POST.get('next') or "impresoras:calendario")
+    # Usar el parámetro next del POST para mantener la misma vista
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('impresoras:calendario')
+    return redirect(next_url)
 
 def crear_reserva(request):
     if request.method != "POST":
@@ -433,6 +404,11 @@ def crear_reserva(request):
     imp = get_object_or_404(Impresora, id=form.cleaned_data["impresora_id"])
     f = form.cleaned_data["fecha"]
     h = form.cleaned_data["hora"]
+
+    # Verificar si la impresora está disponible
+    if not imp.disponible:
+        messages.error(request, f"La impresora {imp.nombre} está deshabilitada y no se pueden hacer reservas.")
+        return redirect(_next(request, "impresoras:calendario"))
 
     today = timezone.localdate()
     now_hour = timezone.localtime().hour
@@ -515,7 +491,9 @@ def crear_reserva(request):
     else:
         messages.success(request, "Reserva creada correctamente.")
 
-    return redirect(_next(request, "impresoras:calendario"))
+    # Usar el parámetro next del POST para mantener la misma vista
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('impresoras:calendario')
+    return redirect(next_url)
 
 # ---------------------------------------------------------------------
 # Penalizaciones y buffer (admin)
@@ -545,25 +523,6 @@ def penalizar_reserva(request, reserva_id):
     return redirect(_next(request, "impresoras:admin_reservas"))
 
 
-@staff_member_required
-def penalizar_lab(request, lab_id):
-    """Penaliza a un alumno desde una reserva del laboratorio (no borra la reserva)."""
-    lab = get_object_or_404(LabReserva, id=lab_id)
-    days = int(request.POST.get("days", 3))
-    next_url = _next(request, "impresoras:calendario")
-
-    persona = persona_de_lab(lab)
-    if not persona:
-        messages.error(request, "No se pudo identificar a la persona.")
-        return redirect(next_url)
-
-    # Penalización a la persona (LABORATORIO)
-    persona.no_show_count = (persona.no_show_count or 0) + 1
-    persona.penalizado_lab_hasta = timezone.now() + timedelta(days=days)
-    persona.save(update_fields=["no_show_count", "penalizado_lab_hasta"])
-
-    messages.success(request, f"Penalización aplicada a {persona.nombre} (laboratorio).")
-    return redirect(next_url)
 
 @staff_member_required
 def liberar_buffer(request, reserva_id):
@@ -576,9 +535,7 @@ def liberar_buffer(request, reserva_id):
 # Excel
 # ---------------------------------------------------------------------
 @login_required
-@login_required
 def exportar_excel_mes(request):
-    from collections import defaultdict
 
     month_str = request.GET.get("month")           # "YYYY-MM"
     impresora_id = request.GET.get("impresora")    # puede venir vacío o ser un id
@@ -902,28 +859,6 @@ def calendario_admin(request):
 
 
 
-@staff_member_required
-def penalizar_lab(request, lab_id):
-    lab = get_object_or_404(LabReserva, id=lab_id)
-    # buscar Persona por cédula y, si no, por nombre:
-    persona = None
-    if lab.estudiante_cedula:
-        persona = Persona.objects.filter(cedula=lab.estudiante_cedula).first()
-    if not persona and lab.estudiante_nombre:
-        persona = Persona.objects.filter(nombre=lab.estudiante_nombre).first()
-
-    if not persona:
-        messages.error(request, "No se encontró la Persona asociada a esta reserva.")
-        return redirect(_next(request, "impresoras:admin_reservas"))
-
-    days = int(request.POST.get("days", 3))
-    # Penalización específica de LABORATORIO
-    persona.no_show_count = (getattr(persona, "no_show_count", 0) or 0) + 1
-    persona.penalizado_lab_hasta = timezone.now() + timedelta(days=days)
-    persona.save(update_fields=["no_show_count", "penalizado_lab_hasta"])
-
-    messages.success(request, f"Penalización aplicada a {persona.nombre}.")
-    return redirect(_next(request, "impresoras:admin_reservas"))
 
 
 @login_required
@@ -1012,7 +947,7 @@ def lista_penalizados_lab(request):
 
 @staff_member_required
 def penalizar_lab(request, lab_id):
-    from datetime import timedelta
+    """Penaliza a un alumno desde una reserva del laboratorio."""
     r = get_object_or_404(LabReserva, id=lab_id)
     persona = persona_de_reserva(SimpleNamespace(
         estudiante_cedula=r.estudiante_cedula,
@@ -1024,7 +959,7 @@ def penalizar_lab(request, lab_id):
         messages.error(request, "No se encontró la Persona asociada a esta reserva.")
         return redirect(_next(request, "impresoras:admin_reservas"))
 
-    # Penalización específica de LABORATORIO (segunda definición mantenida, ajustada)
+    # Penalización específica de LABORATORIO
     persona.no_show_count = (persona.no_show_count or 0) + 1
     persona.penalizado_lab_hasta = timezone.now() + timedelta(days=days)
     persona.save(update_fields=["no_show_count", "penalizado_lab_hasta"])
@@ -1037,26 +972,6 @@ def penalizar_lab(request, lab_id):
 
 
 
-@staff_member_required
-def lista_penalizados_impresoras(request):
-    now_ = timezone.now()
-    personas = (Persona.objects
-                .filter(penalizado_impresoras_hasta__isnull=False,
-                        penalizado_impresoras_hasta__gt=now_)
-                .order_by('-penalizado_impresoras_hasta', 'nombre'))
-    return render(request, "impresoras/penalizados.html",
-                  {"personas": personas, "titulo": "Penalizados (impresoras)"})
-
-
-@staff_member_required
-def lista_penalizados_laboratorio(request):
-    now_ = timezone.now()
-    personas = (Persona.objects
-                .filter(penalizado_lab_hasta__isnull=False,
-                        penalizado_lab_hasta__gt=now_)
-                .order_by('-penalizado_lab_hasta', 'nombre'))
-    return render(request, "impresoras/penalizados.html",
-                  {"personas": personas, "titulo": "Penalizados (laboratorio)"})
 
 
 
@@ -1091,7 +1006,6 @@ def exportar_excel_lab(request):
     No depende de impresora_id ni del nombre del recurso.
     Crea 3 hojas: Detalle Lab, Asistencia Lab (Usados) y Resumen Lab.
     """
-    from collections import defaultdict
 
     month_str = request.GET.get("month")  # "YYYY-MM"
     if not month_str:

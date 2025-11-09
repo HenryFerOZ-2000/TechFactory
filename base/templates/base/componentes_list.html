@@ -17,17 +17,21 @@
 
 <div class="card bg-dark border-secondary mb-4">
   <div class="card-body">
-    <form action="{% url 'base:componentes_create' %}" method="post" class="row g-2">
+    <form id="componenteForm" action="{% url 'base:componentes_create' %}" method="post" class="row g-2">
       {% csrf_token %}
-      <div class="col-md-3"><input class="form-control" name="nombre" placeholder="Nombre *" required></div>
-      <div class="col-md-3"><input class="form-control" name="ubicacion" placeholder="Ubicación"></div>
-      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_total" placeholder="Total" min="0" value="0"></div>
-      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_disponible" placeholder="Disponible" min="0" value="0"></div>
+      <input type="hidden" name="comp_id" id="comp_id" value="">
+      <div class="col-md-3"><input class="form-control" name="nombre" id="nombre" placeholder="Nombre *" required></div>
+      <div class="col-md-3"><input class="form-control" name="ubicacion" id="ubicacion" placeholder="Ubicación"></div>
+      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_total" id="cantidad_total" placeholder="Total" min="0" value="0"></div>
+      <div class="col-md-2"><input class="form-control" type="number" name="cantidad_disponible" id="cantidad_disponible" placeholder="Disponible" min="0" value="0"></div>
       <div class="col-md-1 form-check d-flex align-items-center">
         <input class="form-check-input" type="checkbox" name="activo" id="activo" checked>
         <label class="ms-2" for="activo">Activo</label>
       </div>
-      <div class="col-md-1 d-grid"><button class="btn btn-primary">Guardar</button></div>
+      <div class="col-md-1 d-grid">
+        <button type="submit" class="btn btn-primary" id="btnGuardar">Guardar</button>
+        <button type="button" class="btn btn-secondary d-none" id="btnCancelar" onclick="cancelarEdicion()">Cancelar</button>
+      </div>
     </form>
   </div>
 </div>
@@ -51,13 +55,27 @@
         <td>{{ c.ubicacion }}</td>
         <td>{{ c.cantidad_total }}</td>
         <td>{{ c.cantidad_disponible }}</td>
-        <td>{% if c.activo %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
         <td>
-          <form action="{% url 'base:componentes_delete' c.id %}" method="post" class="d-inline">
-           {% csrf_token %}
-           <button class="btn btn-danger btn-sm">Eliminar</button>
-          </form>
-
+          {% if c.activo %}
+            <span class="badge bg-success">Sí</span>
+          {% else %}
+            <span class="badge bg-secondary">No</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-warning btn-sm" onclick="editarComponente({{ c.id }}, '{{ c.nombre|escapejs }}', '{{ c.ubicacion|escapejs }}', {{ c.cantidad_total }}, {{ c.cantidad_disponible }}, {% if c.activo %}true{% else %}false{% endif %})">Editar</button>
+            <form action="{% url 'base:componentes_toggle_activo' c.id %}" method="post" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-{% if c.activo %}secondary{% else %}success{% endif %} btn-sm">
+                {% if c.activo %}Desactivar{% else %}Activar{% endif %}
+              </button>
+            </form>
+            <form action="{% url 'base:componentes_delete' c.id %}" method="post" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Está seguro de eliminar este componente?')">Eliminar</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% empty %}
@@ -66,4 +84,42 @@
     </tbody>
   </table>
 </div>
+
+<script>
+function editarComponente(id, nombre, ubicacion, total, disponible, activo) {
+  document.getElementById('comp_id').value = id;
+  document.getElementById('nombre').value = nombre || '';
+  document.getElementById('ubicacion').value = ubicacion || '';
+  document.getElementById('cantidad_total').value = total || 0;
+  document.getElementById('cantidad_disponible').value = disponible || 0;
+  document.getElementById('activo').checked = activo === true || activo === 'true' || activo === true;
+  
+  // Cambiar el action del formulario
+  const form = document.getElementById('componenteForm');
+  form.action = "{% url 'base:componentes_edit' 0 %}".replace('/0/', '/' + id + '/');
+  
+  // Cambiar el texto del botón
+  document.getElementById('btnGuardar').textContent = 'Actualizar';
+  document.getElementById('btnCancelar').classList.remove('d-none');
+  
+  // Scroll al formulario
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('nombre').focus();
+}
+
+function cancelarEdicion() {
+  document.getElementById('comp_id').value = '';
+  document.getElementById('nombre').value = '';
+  document.getElementById('ubicacion').value = '';
+  document.getElementById('cantidad_total').value = 0;
+  document.getElementById('cantidad_disponible').value = 0;
+  document.getElementById('activo').checked = true;
+  
+  const form = document.getElementById('componenteForm');
+  form.action = "{% url 'base:componentes_create' %}";
+  
+  document.getElementById('btnGuardar').textContent = 'Guardar';
+  document.getElementById('btnCancelar').classList.add('d-none');
+}
+</script>
 {% endblock %}

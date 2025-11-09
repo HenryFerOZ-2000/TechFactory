@@ -60,13 +60,16 @@
     {% for t in tab_data %}
       <li class="nav-item" role="presentation">
         <button
-          class="nav-link {% if forloop.first %}active{% endif %}"
+          class="nav-link {% if forloop.first %}active{% endif %} {% if not t.imp.disponible %}text-muted{% endif %}"
           id="tab-{{ t.imp.id }}"
           data-bs-toggle="tab"
           data-bs-target="#pane-{{ t.imp.id }}"
           type="button"
           role="tab">
           {{ t.imp.nombre }}
+          {% if not t.imp.disponible %}
+            <span class="badge bg-secondary ms-1">Deshabilitada</span>
+          {% endif %}
         </button>
       </li>
     {% endfor %}
@@ -93,6 +96,7 @@
 
                   {% for d in week_days %}
                     {% res_at t.mapa d h as r %}
+                    
 
                     {# ===== LABORATORIO ===== #}
                     {% if t.is_lab %}
@@ -174,19 +178,29 @@
                           {% else %}
                             <td>
                               <div class="d-flex flex-column align-items-center gap-2">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
-                                        data-bs-html="true" data-bs-sanitize="false"
-                                        data-bs-content="
-                                          <div class='mb-2 small'>Cupos disponibles: {{ left }}/{{ lab_capacity }}</div>
-                                          <button class='btn btn-primary btn-sm'
-                                                  onclick='openReserveLabModal({{ t.imp.id }}, &quot;{{ d|date:"Y-m-d" }}&quot;, {{ h }}, {{ lab_capacity }}, {{ count }})'>
-                                            Reservar
-                                          </button>
-                                        ">
-                                  Libre ({{ left }})
-                                </button>
+                                {% is_past_time d h now as is_past %}
+                                {% if is_past %}
+                                  <button type="button"
+                                          class="btn btn-sm btn-outline-secondary"
+                                          disabled
+                                          style="opacity: 0.6; cursor: not-allowed;">
+                                    Libre ({{ left }})
+                                  </button>
+                                {% else %}
+                                  <button type="button"
+                                          class="btn btn-sm btn-outline-primary"
+                                          data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
+                                          data-bs-html="true" data-bs-sanitize="false"
+                                          data-bs-content="
+                                            <div class='mb-2 small'>Cupos disponibles: {{ left }}/{{ lab_capacity }}</div>
+                                            <button class='btn btn-primary btn-sm'
+                                                    onclick='openReserveLabModal({{ t.imp.id }}, &quot;{{ d|date:"Y-m-d" }}&quot;, {{ h }}, {{ lab_capacity }}, {{ count }})'>
+                                              Reservar
+                                            </button>
+                                          ">
+                                    Libre ({{ left }})
+                                  </button>
+                                {% endif %}
 
                                 {% if is_admin and count > 0 %}
                                   <div id="lab-pop-{{ t.imp.id }}-{{ d|date:'Ymd' }}-{{ h }}" class="d-none">
@@ -398,6 +412,37 @@
                         {# ----- CELDA LIBRE ----- #}
                         {% else %}
                           <td>
+                            {% is_past_time d h now as is_past %}
+                            {% if is_past or not t.imp.disponible %}
+                              <button type="button"
+                                      class="btn btn-sm btn-outline-secondary"
+                                      disabled
+                                      style="opacity: 0.6; cursor: not-allowed;">
+                                {% if not t.imp.disponible %}Deshabilitada{% else %}Libre{% endif %}
+                              </button>
+                            {% else %}
+                              <button type="button"
+                                      class="btn btn-sm btn-outline-primary"
+                                      data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
+                                      data-bs-html="true" data-bs-sanitize="false"
+                                      data-bs-trigger="focus"
+                                      data-bs-content="<button class='btn btn-primary btn-sm' onclick='openReserveModal({{ t.imp.id }}, &quot;{{ d|date:'Y-m-d' }}&quot;, {{ h }})'>Reservar</button>">
+                                Libre
+                              </button>
+                            {% endif %}
+                          </td>
+                        {% endif %}
+                      {% else %}
+                        <td>
+                          {% is_past_time d h now as is_past %}
+                          {% if is_past or not t.imp.disponible %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    disabled
+                                    style="opacity: 0.6; cursor: not-allowed;">
+                              {% if not t.imp.disponible %}Deshabilitada{% else %}Libre{% endif %}
+                            </button>
+                          {% else %}
                             <button type="button"
                                     class="btn btn-sm btn-outline-primary"
                                     data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
@@ -406,18 +451,7 @@
                                     data-bs-content="<button class='btn btn-primary btn-sm' onclick='openReserveModal({{ t.imp.id }}, &quot;{{ d|date:'Y-m-d' }}&quot;, {{ h }})'>Reservar</button>">
                               Libre
                             </button>
-                          </td>
-                        {% endif %}
-                      {% else %}
-                        <td>
-                          <button type="button"
-                                  class="btn btn-sm btn-outline-primary"
-                                  data-bs-toggle="popover" data-bs-placement="top" data-bs-container="body"
-                                  data-bs-html="true" data-bs-sanitize="false"
-                                  data-bs-trigger="focus"
-                                  data-bs-content="<button class='btn btn-primary btn-sm' onclick='openReserveModal({{ t.imp.id }}, &quot;{{ d|date:'Y-m-d' }}&quot;, {{ h }})'>Reservar</button>">
-                            Libre
-                          </button>
+                          {% endif %}
                         </td>
                       {% endif %}
                     {% endif %}
@@ -448,23 +482,39 @@
         <input type="hidden" name="hora" id="hora">
         <input type="hidden" name="next" id="nextUrl">
         <div class="form-text" id="slotInfo"></div>
+        
+        <div class="alert alert-info small mb-0">
+          <strong>⚠️ Todos los campos marcados son obligatorios</strong>
+        </div>
 
         <div>
-          <label class="form-label">Nombre</label>
-          <input class="form-control" name="estudiante_nombre" required>
+          <label class="form-label">Nombre <span class="text-danger">*</span></label>
+          <input class="form-control" name="estudiante_nombre" id="reserveNombre" required
+                 placeholder="Ej: Juan Pérez" 
+                 pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,}"
+                 title="Ingrese nombre y apellido (solo letras)">
+          <small class="form-text text-muted">Ingrese nombre y apellido</small>
         </div>
         <div>
           <label class="form-label">Cédula</label>
-          <input class="form-control" name="estudiante_cedula">
+          <input type="text" class="form-control" name="estudiante_cedula" id="reserveCedula"
+                 pattern="[0-9]*" 
+                 inputmode="numeric"
+                 onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                 placeholder="Solo números">
         </div>
         <div>
           <label class="form-label">Celular</label>
-          <input class="form-control" name="estudiante_celular">
+          <input type="text" class="form-control" name="estudiante_celular" id="reserveCelular"
+                 pattern="[0-9]*" 
+                 inputmode="numeric"
+                 onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                 placeholder="Solo números">
         </div>
 
         <div>
-          <label class="form-label">Carrera</label>
-          <select class="form-select" name="estudiante_carrera" required>
+          <label class="form-label">Carrera <span class="text-danger">*</span></label>
+          <select class="form-select" name="estudiante_carrera" id="reserveCarrera" required>
             <option value="" selected disabled>Selecciona una carrera…</option>
             {% for val, label in form.fields.estudiante_carrera.choices %}
               <option value="{{ val }}">{{ label }}</option>
@@ -473,7 +523,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-primary">Reservar</button>
+        <button type="submit" class="btn btn-primary" id="reserveBtn" disabled>Reservar</button>
       </div>
     </form>
   </div>
@@ -518,36 +568,52 @@
         <input type="hidden" name="next" id="labNext">
         <div class="form-text" id="labSlotInfo"></div>
         <div class="form-text" id="labCupoHint"></div>
+        
+        <div class="alert alert-info small mb-0">
+          <strong>⚠️ Todos los campos marcados son obligatorios</strong>
+        </div>
 
         <div>
-          <label class="form-label">Nombre</label>
-          <input class="form-control" name="estudiante_nombre" required>
+          <label class="form-label">Nombre <span class="text-danger">*</span></label>
+          <input class="form-control" name="estudiante_nombre" id="labNombre" required
+                 placeholder="Ej: Juan Pérez" 
+                 pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,}"
+                 title="Ingrese nombre y apellido (solo letras)">
+          <small class="form-text text-muted">Ingrese nombre y apellido</small>
         </div>
         <div>
           <label class="form-label">Cédula</label>
-          <input class="form-control" name="estudiante_cedula">
+          <input type="text" class="form-control" name="estudiante_cedula" id="labCedula"
+                 pattern="[0-9]*" 
+                 inputmode="numeric"
+                 onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                 placeholder="Solo números">
         </div>
         <div>
           <label class="form-label">Celular</label>
-          <input class="form-control" name="estudiante_celular">
+          <input type="text" class="form-control" name="estudiante_celular" id="labCelular"
+                 pattern="[0-9]*" 
+                 inputmode="numeric"
+                 onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                 placeholder="Solo números">
         </div>
         <div>
-          <label class="form-label">Carrera</label>
-          <select class="form-select" name="estudiante_carrera" required>
+          <label class="form-label">Carrera <span class="text-danger">*</span></label>
+          <select class="form-select" name="estudiante_carrera" id="labCarrera" required>
             <option value="" selected disabled>Selecciona una carrera…</option>
             {% for val, label in form.fields.estudiante_carrera.choices %}
               <option value="{{ val }}">{{ label }}</option>
             {% endfor %}
           </select>
         </div>
-      </div>
-            <div>
-        <label class="form-label">Actividad</label>
-        <textarea class="form-control" name="actividad" rows=""
-                  placeholder="Ej.: Proyecto de clase, impresión 3D, etc." required></textarea>
+        <div>
+          <label class="form-label">Actividad <span class="text-danger">*</span></label>
+          <textarea class="form-control" name="actividad" id="labActividad" rows="3"
+                    placeholder="Ej.: Proyecto de clase, impresión 3D, etc." required></textarea>
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-primary">Reservar</button>
+        <button type="submit" class="btn btn-primary" id="labReserveBtn" disabled>Reservar</button>
       </div>
     </form>
   </div>
@@ -743,6 +809,75 @@
     });
   });
 
+  // Validación de campos obligatorios para modal de impresoras
+  function validateReserveForm() {
+    const nombre = document.getElementById('reserveNombre')?.value.trim();
+    const carrera = document.getElementById('reserveCarrera')?.value;
+    const btn = document.getElementById('reserveBtn');
+    
+    // Validar que el nombre tenga al menos nombre y apellido (2 palabras)
+    const nombreValido = nombre && nombre.split(/\s+/).filter(p => p.length > 0).length >= 2;
+    
+    if (btn) {
+      const isValid = nombreValido && carrera && carrera !== '';
+      btn.disabled = !isValid;
+      if (isValid) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+      }
+    }
+    
+    // Mostrar mensaje de error si el nombre no es válido
+    const nombreInput = document.getElementById('reserveNombre');
+    if (nombreInput) {
+      if (nombre && !nombreValido) {
+        nombreInput.setCustomValidity('Por favor ingrese nombre y apellido');
+        nombreInput.classList.add('is-invalid');
+      } else {
+        nombreInput.setCustomValidity('');
+        nombreInput.classList.remove('is-invalid');
+      }
+    }
+  }
+
+  // Validación de campos obligatorios para modal de laboratorio
+  function validateLabReserveForm() {
+    const nombre = document.getElementById('labNombre')?.value.trim();
+    const carrera = document.getElementById('labCarrera')?.value;
+    const actividad = document.getElementById('labActividad')?.value.trim();
+    const btn = document.getElementById('labReserveBtn');
+    
+    // Validar que el nombre tenga al menos nombre y apellido (2 palabras)
+    const nombreValido = nombre && nombre.split(/\s+/).filter(p => p.length > 0).length >= 2;
+    
+    if (btn) {
+      const isValid = nombreValido && carrera && carrera !== '' && actividad;
+      btn.disabled = !isValid;
+      if (isValid) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+      } else {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+      }
+    }
+    
+    // Mostrar mensaje de error si el nombre no es válido
+    const nombreInput = document.getElementById('labNombre');
+    if (nombreInput) {
+      if (nombre && !nombreValido) {
+        nombreInput.setCustomValidity('Por favor ingrese nombre y apellido');
+        nombreInput.classList.add('is-invalid');
+      } else {
+        nombreInput.setCustomValidity('');
+        nombreInput.classList.remove('is-invalid');
+      }
+    }
+  }
+
   // Abre modal de impresora
   function openReserveModal(impresoraId, fecha, hora) {
     hideAllPopovers();
@@ -752,15 +887,31 @@
     const monday = root?.dataset?.monday;
     if (!u.searchParams.get('week') && monday) u.searchParams.set('week', monday);
     u.searchParams.set('imp', impresoraId);
-    document.getElementById('nextUrl').value = u.pathname + u.search;
+    const nextUrlValue = u.pathname + u.search;
 
     const pretty = `${String(hora).padStart(2,'0')}:00 – ${String(hora+1).toString().padStart(2,'0')}:00`;
+    
+    // Resetear formulario y validar
+    const modal = document.getElementById('reserveModal');
+    const form = modal.querySelector('form');
+    form.reset();
+    
+    // Establecer valores después del reset para que no se pierdan
+    document.getElementById('nextUrl').value = nextUrlValue;
     document.getElementById('impId').value = impresoraId;
     document.getElementById('fecha').value = fecha;
     document.getElementById('hora').value = hora;
     document.getElementById('slotInfo').innerText = `Reserva para ${fecha} • ${pretty}`;
+    
+    // Aplicar validación numérica a los campos del modal
+    const cedulaInput = document.getElementById('reserveCedula');
+    const celularInput = document.getElementById('reserveCelular');
+    if (cedulaInput) allowOnlyNumbers(cedulaInput);
+    if (celularInput) allowOnlyNumbers(celularInput);
+    
+    validateReserveForm();
 
-    new bootstrap.Modal(document.getElementById('reserveModal')).show();
+    new bootstrap.Modal(modal).show();
   }
 
   // Abre modal LAB
@@ -772,19 +923,102 @@
     const monday = root?.dataset?.monday;
     if (!u.searchParams.get('week') && monday) u.searchParams.set('week', monday);
     u.searchParams.set('imp', impresoraId);
-    document.getElementById('labNext').value = u.pathname + u.search;
-
-    document.getElementById('labFecha').value = fecha;
-    document.getElementById('labHora').value  = hora;
+    const nextUrlValue = u.pathname + u.search;
 
     const pretty = `${String(hora).padStart(2,'0')}:00 – ${String(hora+1).toString().padStart(2,'0')}:00`;
-    document.getElementById('labSlotInfo').innerText = `Reserva para ${fecha} • ${pretty}`;
-
     const left = Math.max(0, (capacidad || 0) - (yaTomados || 0));
-    document.getElementById('labCupoHint').innerText = `Cupos disponibles: ${left}/${capacidad}`;
 
-    new bootstrap.Modal(document.getElementById('labReserveModal')).show();
+    // Resetear formulario y validar
+    const modal = document.getElementById('labReserveModal');
+    const form = modal.querySelector('form');
+    form.reset();
+    
+    // Establecer valores después del reset para que no se pierdan
+    document.getElementById('labNext').value = nextUrlValue;
+    document.getElementById('labFecha').value = fecha;
+    document.getElementById('labHora').value = hora;
+    document.getElementById('labSlotInfo').innerText = `Reserva para ${fecha} • ${pretty}`;
+    document.getElementById('labCupoHint').innerText = `Cupos disponibles: ${left}/${capacidad}`;
+    
+    // Aplicar validación numérica a los campos del modal
+    const labCedulaInput = document.getElementById('labCedula');
+    const labCelularInput = document.getElementById('labCelular');
+    if (labCedulaInput) allowOnlyNumbers(labCedulaInput);
+    if (labCelularInput) allowOnlyNumbers(labCelularInput);
+    
+    validateLabReserveForm();
+
+    new bootstrap.Modal(modal).show();
   }
+
+  // Función para permitir solo números en campos de cédula y celular
+  function allowOnlyNumbers(input) {
+    input.addEventListener('keypress', function(e) {
+      const charCode = e.which ? e.which : e.keyCode;
+      if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+        e.preventDefault();
+        return false;
+      }
+      return true;
+    });
+    
+    // También prevenir pegar texto no numérico
+    input.addEventListener('paste', function(e) {
+      const paste = (e.clipboardData || window.clipboardData).getData('text');
+      if (!/^\d+$/.test(paste)) {
+        e.preventDefault();
+        return false;
+      }
+    });
+    
+    // Validar al perder el foco
+    input.addEventListener('blur', function(e) {
+      const value = e.target.value;
+      if (value && !/^\d+$/.test(value)) {
+        e.target.value = value.replace(/\D/g, '');
+      }
+    });
+  }
+
+  // Event listeners para validación en tiempo real
+  document.addEventListener('DOMContentLoaded', function() {
+    // Aplicar validación numérica a campos de cédula y celular
+    const cedulaInputs = document.querySelectorAll('input[name="estudiante_cedula"], input[name="cedula"]');
+    const celularInputs = document.querySelectorAll('input[name="estudiante_celular"], input[name="celular"]');
+    
+    cedulaInputs.forEach(allowOnlyNumbers);
+    celularInputs.forEach(allowOnlyNumbers);
+
+    // Validación para modal de impresoras
+    const reserveModal = document.getElementById('reserveModal');
+    if (reserveModal) {
+      reserveModal.addEventListener('input', function(e) {
+        if (e.target.id === 'reserveNombre' || e.target.id === 'reserveCarrera') {
+          validateReserveForm();
+        }
+      });
+      reserveModal.addEventListener('change', function(e) {
+        if (e.target.id === 'reserveCarrera') {
+          validateReserveForm();
+        }
+      });
+    }
+
+    // Validación para modal de laboratorio
+    const labReserveModal = document.getElementById('labReserveModal');
+    if (labReserveModal) {
+      labReserveModal.addEventListener('input', function(e) {
+        if (e.target.id === 'labNombre' || e.target.id === 'labCarrera' || e.target.id === 'labActividad') {
+          validateLabReserveForm();
+        }
+      });
+      labReserveModal.addEventListener('change', function(e) {
+        if (e.target.id === 'labCarrera') {
+          validateLabReserveForm();
+        }
+      });
+    }
+  });
 </script>
 
 

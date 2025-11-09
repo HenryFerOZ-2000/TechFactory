@@ -1,4 +1,4 @@
-# Stdlib
+# Standard library
 import csv
 from io import BytesIO
 from zoneinfo import ZoneInfo
@@ -11,39 +11,24 @@ from openpyxl.utils import get_column_letter
 # Django
 from django.conf import settings
 from django.contrib import messages
-from django.core.mail import send_mail
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth.decorators import login_required
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone as djtz
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.text import slugify
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 
 # Local apps
 from .models import Componente, Persona, Registro
 
 # Constantes
 ACTION_PASSWORD = getattr(settings, "ACTION_PASSWORD", "TechFactory2025")
-
-from .models import Registro
-from .models import Componente, Registro
-
-
-
-# views.py
-from django.views.decorators.http import require_POST
-from django.db import transaction
-from django.db.models.deletion import ProtectedError
-from django.utils import timezone
-from django.utils.text import slugify
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
-
-from .models import Componente, Registro
-
-from django.shortcuts import render
 
 def landing(request):
     return render(request, 'base/landing.html')
@@ -281,12 +266,6 @@ def importar_csv(request):
         return redirect("base:componentes")
 
     return render(request, "base/importar_csv.html")
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.shortcuts import render, redirect
-from django.urls import reverse
-
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -406,8 +385,6 @@ def exportar_excel(request):
     return resp
 
 
-from django.utils import timezone  # <-- NUEVO
-from django.contrib.auth.decorators import login_required
 @login_required
 def index(request):
     registros = Registro.objects.select_related('persona','componente').all()
@@ -446,10 +423,6 @@ def index(request):
 
 
 
-from django.utils import timezone
-from django.contrib import messages
-from django.shortcuts import redirect
-from .models import Persona, Componente, Registro
 
 def registrar_salida(request):
     if request.method != 'POST':
@@ -459,6 +432,23 @@ def registrar_salida(request):
     cedula  = (request.POST.get('cedula')  or '').strip()
     celular = (request.POST.get('celular') or '').strip()
     carrera = (request.POST.get('carrera') or '').strip()
+    
+    # Validar nombre y apellido
+    if nombre:
+        partes = nombre.split()
+        if len(partes) < 2:
+            messages.error(request, 'Por favor ingrese nombre y apellido.')
+            return redirect('base:index')
+    
+    # Validar que cédula solo contenga números
+    if cedula and not cedula.isdigit():
+        messages.error(request, 'La cédula solo puede contener números.')
+        return redirect('base:index')
+    
+    # Validar que celular solo contenga números
+    if celular and not celular.isdigit():
+        messages.error(request, 'El celular solo puede contener números.')
+        return redirect('base:index')
 
     # cantidad segura
     try:
@@ -537,10 +527,6 @@ def registrar_salida(request):
     return redirect('base:index')
 
 
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.conf import settings
-from base.models import Registro
 
 
 
@@ -602,6 +588,38 @@ def componentes_create(request):
         defaults={"ubicacion": ubic, "cantidad_total": total, "cantidad_disponible": disp, "activo": activo}
     )
     messages.success(request, "Componente creado/actualizado.")
+    return redirect("base:componentes_list")
+
+@require_http_methods(["POST"])
+def componentes_edit(request, comp_id):
+    comp = get_object_or_404(Componente, id=comp_id)
+    nombre = request.POST.get("nombre","").strip()
+    ubic  = request.POST.get("ubicacion","").strip()
+    total = int(request.POST.get("cantidad_total") or 0)
+    disp  = int(request.POST.get("cantidad_disponible") or 0)
+    activo = request.POST.get("activo") == "on"
+    
+    if not nombre:
+        messages.error(request, "Nombre requerido.")
+        return redirect("base:componentes_list")
+    
+    comp.nombre = nombre
+    comp.ubicacion = ubic
+    comp.cantidad_total = total
+    comp.cantidad_disponible = disp
+    comp.activo = activo
+    comp.save()
+    
+    messages.success(request, f"Componente '{nombre}' actualizado.")
+    return redirect("base:componentes_list")
+
+@require_http_methods(["POST"])
+def componentes_toggle_activo(request, comp_id):
+    comp = get_object_or_404(Componente, id=comp_id)
+    comp.activo = not comp.activo
+    comp.save()
+    estado = "activado" if comp.activo else "desactivado"
+    messages.success(request, f"Componente '{comp.nombre}' {estado}.")
     return redirect("base:componentes_list")
 
 

@@ -4,9 +4,24 @@
   <div class="col-12">
     <form action="{% url 'base:registrar_salida' %}" method="post" class="row g-2">
       {% csrf_token %}
-      <div class="col-md-3"><input name="nombre" class="form-control" placeholder="NOMBRE *" required></div>
-      <div class="col-md-3"><input name="cedula" class="form-control" placeholder="CÉDULA *" required></div>
-      <div class="col-md-3"><input name="celular" class="form-control" placeholder="CELULAR"></div>
+      <div class="col-md-3">
+        <input name="nombre" class="form-control" placeholder="NOMBRE *" required
+               pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,}"
+               title="Ingrese nombre y apellido (solo letras)">
+        <small class="form-text text-muted">Nombre y apellido</small>
+      </div>
+      <div class="col-md-3">
+        <input name="cedula" type="text" class="form-control" placeholder="CÉDULA * (solo números)" required
+               pattern="[0-9]*" 
+               inputmode="numeric"
+               onkeypress="return event.charCode >= 48 && event.charCode <= 57">
+      </div>
+      <div class="col-md-3">
+        <input name="celular" type="text" class="form-control" placeholder="CELULAR (solo números)"
+               pattern="[0-9]*" 
+               inputmode="numeric"
+               onkeypress="return event.charCode >= 48 && event.charCode <= 57">
+      </div>
       <div class="col-md-3">
         <select name="carrera" class="form-select" required>
           <option value="" disabled selected>CARRERA *</option>

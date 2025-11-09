@@ -22,20 +22,16 @@ urlpatterns = [
     path('limpiar_todo/', views.limpiar_todo, name='limpiar_todo'),
 
     # Componentes (CRUD)
-    path('componentes/', views.componentes_list, name='componentes'),  # <- NOMBRE QUE PIDE LA PLANTILLA
+    path('componentes/', views.componentes_list, name='componentes_list'),
     path('componentes/crear/', views.componentes_create, name='componentes_create'),
+    path('componentes/<int:comp_id>/editar/', views.componentes_edit, name='componentes_edit'),
+    path('componentes/<int:comp_id>/toggle-activo/', views.componentes_toggle_activo, name='componentes_toggle_activo'),
     path('componentes/<int:comp_id>/eliminar/', views.componentes_delete, name='componentes_delete'),
 
     # CSV
     path('importar_csv/', views.importar_csv, name='importar_csv'),
     path('descargar_plantilla_csv/', views.descargar_plantilla_csv, name='descargar_plantilla_csv'),
-    path('componentes/', views.componentes_list, name='componentes_list'),
     path('cargar_inventario/', views.cargar_inventario, name='cargar_inventario'),
-    path('descargar_plantilla_csv/', views.descargar_plantilla_csv, name='descargar_plantilla_csv'),
-    path('exportar_excel/', views.exportar_excel, name='exportar_excel'),
-    path('login/', views.login_view, name='login'),
-    path('logout/', views.logout_view, name='logout'),
-    path('informe_vencidos/', views.informe_vencidos, name='informe_vencidos'),  # 👈 NUEVA
-    
+    path('informe_vencidos/', views.informe_vencidos, name='informe_vencidos'),
 ]
 
