@@ -78,6 +78,30 @@
   <div class="tab-content border border-top-0 rounded-bottom p-3 bg-white">
     {% for t in tab_data %}
       <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ t.imp.id }}" role="tabpanel">
+        {% if is_admin %}
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+          <div>
+            <span class="badge bg-dark bg-opacity-50 text-uppercase fw-semibold px-3 py-2">
+              {{ t.imp.nombre }}
+            </span>
+            {% if t.is_lab %}
+              <span class="ms-2 badge bg-info text-dark">Laboratorio</span>
+            {% endif %}
+          </div>
+          <form method="post" action="{% url 'impresoras:toggle_impresora_disponible' t.imp.id %}" class="d-flex align-items-center gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="switch-{{ t.imp.id }}"
+                     {% if t.imp.disponible %}checked{% endif %}
+                     onchange="this.form.submit()">
+              <label class="form-check-label fw-semibold" for="switch-{{ t.imp.id }}">
+                {% if t.imp.disponible %}Impresora habilitada{% else %}Impresora deshabilitada{% endif %}
+              </label>
+            </div>
+          </form>
+        </div>
+        {% endif %}
         <div class="table-responsive">
           <table class="table table-bordered align-middle text-center">
             <thead class="table-light">

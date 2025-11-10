@@ -14,6 +14,7 @@ urlpatterns = [
 
     # ----- ADMIN -----
     path("admin/", views.calendario_admin, name="admin_reservas"),
+    path("admin/impresora/<int:imp_id>/toggle/", views.toggle_impresora_disponible, name="toggle_impresora_disponible"),
 
     # Impresoras
     path("admin/cancelar/<int:pk>/", views.admin_cancelar_reserva, name="admin_cancelar"),

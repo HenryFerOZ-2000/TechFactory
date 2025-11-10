@@ -22,6 +22,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.timezone import now
+from django.views.decorators.http import require_http_methods
 
 # Local apps
 from base.models import Persona
@@ -856,6 +857,17 @@ def calendario_admin(request):
     pivot = datetime.strptime(week_str, "%Y-%m-%d").date() if week_str else now().date()
     ctx = _build_context(pivot, admin=True)
     return render(request, "impresoras/calendario.html", ctx)
+
+
+@staff_member_required
+@require_http_methods(["POST"])
+def toggle_impresora_disponible(request, imp_id):
+    imp = get_object_or_404(Impresora, id=imp_id)
+    imp.disponible = not imp.disponible
+    imp.save(update_fields=["disponible"])
+    estado_txt = "habilitada" if imp.disponible else "deshabilitada"
+    messages.success(request, f"{imp.nombre} {estado_txt}.")
+    return redirect(_next(request, "impresoras:admin_reservas"))
 
 
 
